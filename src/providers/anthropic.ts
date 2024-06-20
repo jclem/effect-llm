@@ -1,16 +1,6 @@
-import type { ResponseError } from "@effect/platform/Http/ClientError";
 import * as Http from "@effect/platform/HttpClient";
 import { Schema as S } from "@effect/schema";
-import {
-  Array,
-  Effect,
-  Function,
-  Match,
-  Option,
-  Redacted,
-  Stream,
-} from "effect";
-import type { UnknownException } from "effect/Cause";
+import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
 import { StreamEvent, type Provider, type StreamParams } from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread-event";
@@ -69,63 +59,42 @@ export const make = (
 
     return {
       stream(params: StreamParams) {
-        return Http.request
-          .post("/v1/messages")
-          .pipe(
-            Http.request.jsonBody({
-              // TODO: Handle system messages
-              model: params.model,
-              messages: messagesFromEvents(params.events),
-              max_tokens: params.maxTokens,
-              stream: true,
-            }),
-            Effect.flatMap(client),
-            Effect.flatMap(streamSSE),
-            Effect.map(filterParsedEvents),
-            Effect.map((stream) =>
-              Stream.asyncEffect<StreamEvent, ResponseError | UnknownException>(
-                (emit) => {
-                  let partialMessage = "";
-
-                  return Stream.runForEach(stream, (event) =>
-                    Effect.sync(function () {
-                      decodeContentBlockEvent(event.data).pipe(
-                        Option.match({
-                          onNone: Function.constVoid,
-                          onSome: Match.type<ContentBlockEvent>().pipe(
-                            Match.discriminators("type")({
-                              content_block_delta: (delta) => {
-                                partialMessage += delta.delta.text;
-                                emit.single(
-                                  StreamEvent.Content({
-                                    content: delta.delta.text,
-                                  }),
-                                );
-                              },
-                              content_block_stop: (stop) => {
-                                emit.single(
-                                  StreamEvent.Message({
-                                    message: new AssistantMessage({
-                                      content: partialMessage,
-                                    }),
-                                  }),
-                                );
-                              },
-                            }),
-                            Match.exhaustive,
-                          ),
-                        }),
-                      );
-                    }),
-                  ).pipe(
-                    Effect.andThen(() => emit.end()),
-                    Effect.fork,
-                  );
-                },
-              ),
-            ),
-          )
-          .pipe(Stream.unwrap);
+        return Http.request.post("/v1/messages").pipe(
+          Http.request.jsonBody({
+            // TODO: Handle system messages
+            model: params.model,
+            messages: messagesFromEvents(params.events),
+            max_tokens: params.maxTokens,
+            stream: true,
+          }),
+          Effect.flatMap(client),
+          Effect.flatMap(streamSSE),
+          Stream.unwrap,
+          filterParsedEvents,
+          Stream.filterMap((e) => decodeContentBlockEvent(e.data)),
+          Stream.mapAccum<string, ContentBlockEvent, StreamEvent>(
+            "",
+            (accum, event) => {
+              return Match.type<ContentBlockEvent>().pipe(
+                Match.discriminators("type")({
+                  content_block_delta: (b) =>
+                    [
+                      accum + b.delta.text,
+                      StreamEvent.Content({ content: b.delta.text }),
+                    ] as const,
+                  content_block_stop: (s) =>
+                    [
+                      "",
+                      StreamEvent.Message({
+                        message: new AssistantMessage({ content: accum }),
+                      }),
+                    ] as const,
+                }),
+                Match.exhaustive,
+              )(event);
+            },
+          ),
+        );
       },
     };
   });

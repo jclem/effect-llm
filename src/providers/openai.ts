@@ -1,8 +1,6 @@
-import type { ResponseError } from "@effect/platform/Http/ClientError";
 import * as Http from "@effect/platform/HttpClient";
 import { Schema as S } from "@effect/schema";
-import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
-import type { UnknownException } from "effect/Cause";
+import { Array, Effect, Match, Option, Redacted, Scope, Stream } from "effect";
 import { StreamEvent, type Provider, type StreamParams } from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread-event";
@@ -55,61 +53,54 @@ export const make = (
 
     return {
       stream(params: StreamParams) {
-        return Http.request
-          .post("/v1/chat/completions")
-          .pipe(
-            Http.request.setHeader(
-              "content-type",
-              "application/json; charset=utf-8",
-            ),
-            Http.request.jsonBody({
-              model: params.model,
-              messages: messagesFromEvents(params.events),
-              max_tokens: params.maxTokens,
-              stream: true,
+        return Http.request.post("/v1/chat/completions").pipe(
+          Http.request.setHeader(
+            "content-type",
+            "application/json; charset=utf-8",
+          ),
+          Http.request.jsonBody({
+            model: params.model,
+            messages: messagesFromEvents(params.events),
+            max_tokens: params.maxTokens,
+            stream: true,
+          }),
+          Effect.flatMap(client),
+          Effect.flatMap(streamSSE),
+          Stream.unwrap,
+          filterParsedEvents,
+          Stream.filterMap((e) => decodeChatCompletionChunk(e.data)),
+          (stream) =>
+            Stream.asyncEffect<StreamEvent, never, Scope.Scope>((emit) => {
+              let partialMessage = "";
+
+              return Stream.runForEach(stream, (event) =>
+                Effect.sync(function () {
+                  const choice = event.choices[0];
+                  const content = choice.delta.content ?? "";
+                  const contentEvent = StreamEvent.Content({ content });
+
+                  emit.single(contentEvent);
+
+                  partialMessage += content;
+
+                  if (choice.finish_reason === "stop") {
+                    emit.single(
+                      StreamEvent.Message({
+                        message: new AssistantMessage({
+                          content: partialMessage,
+                        }),
+                      }),
+                    );
+
+                    partialMessage = "";
+                  }
+                }),
+              ).pipe(
+                Effect.andThen(() => emit.end()),
+                Effect.fork,
+              );
             }),
-            Effect.flatMap(client),
-            Effect.flatMap(streamSSE),
-            Effect.map(filterParsedEvents),
-            Effect.map((stream) =>
-              Stream.asyncEffect<StreamEvent, ResponseError | UnknownException>(
-                (emit) => {
-                  let partialMessage = "";
-
-                  return Stream.runForEach(stream, (event) =>
-                    Effect.sync(function () {
-                      const chunkResult = decodeChatCompletionChunk(event.data);
-                      if (Option.isNone(chunkResult)) {
-                        return;
-                      }
-
-                      const choice = chunkResult.value.choices[0];
-                      const content = choice.delta.content ?? "";
-                      const chunk = StreamEvent.Content({ content });
-
-                      emit.single(chunk);
-
-                      partialMessage += chunk.content;
-
-                      if (choice.finish_reason === "stop") {
-                        emit.single(
-                          StreamEvent.Message({
-                            message: new AssistantMessage({
-                              content: partialMessage,
-                            }),
-                          }),
-                        );
-                      }
-                    }),
-                  ).pipe(
-                    Effect.andThen(() => emit.end()),
-                    Effect.fork,
-                  );
-                },
-              ),
-            ),
-          )
-          .pipe(Stream.unwrap);
+        );
       },
     };
   });

@@ -69,8 +69,8 @@ export const streamSSE = (response: Http.response.ClientResponse) =>
 /**
  * Filter an SSE stream to only return parsed events.
  */
-export const filterParsedEvents = (
-  self: Stream.Stream<ParseEvent, Http.error.ResponseError | UnknownException>,
+export const filterParsedEvents = <E, R>(
+  self: Stream.Stream<ParseEvent, E, R>,
 ) =>
   self.pipe(
     Stream.filter((event): event is ParsedEvent => event.type === "event"),
