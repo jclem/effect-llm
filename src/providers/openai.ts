@@ -1,6 +1,6 @@
 import * as Http from "@effect/platform/HttpClient";
 import { Schema as S } from "@effect/schema";
-import { Array, Effect, Match, Option, Redacted, Scope, Stream } from "effect";
+import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
 import { StreamEvent, type Provider, type StreamParams } from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread-event";
@@ -27,6 +27,8 @@ const ChatCompletionChunk = S.parseJson(
     ),
   }),
 );
+
+type ChatCompletionChunk = typeof ChatCompletionChunk.Type;
 
 const decodeChatCompletionChunk = S.decodeUnknownOption(ChatCompletionChunk);
 
@@ -69,37 +71,29 @@ export const make = (
           Stream.unwrap,
           filterParsedEvents,
           Stream.filterMap((e) => decodeChatCompletionChunk(e.data)),
-          (stream) =>
-            Stream.asyncEffect<StreamEvent, never, Scope.Scope>((emit) => {
-              let partialMessage = "";
+          (stream) => {
+            let partialMessage = "";
 
-              return Stream.runForEach(stream, (event) =>
-                Effect.sync(function () {
-                  const choice = event.choices[0];
-                  const content = choice.delta.content ?? "";
-                  const contentEvent = StreamEvent.Content({ content });
+            return Stream.mapConcat(stream, (event) => {
+              const choice = event.choices[0];
+              const content = choice.delta.content ?? "";
+              const contentEvent = StreamEvent.Content({ content });
 
-                  emit.single(contentEvent);
+              partialMessage += content;
 
-                  partialMessage += content;
+              if (choice.finish_reason === "stop") {
+                const message = new AssistantMessage({
+                  content: partialMessage,
+                });
 
-                  if (choice.finish_reason === "stop") {
-                    emit.single(
-                      StreamEvent.Message({
-                        message: new AssistantMessage({
-                          content: partialMessage,
-                        }),
-                      }),
-                    );
+                partialMessage = "";
 
-                    partialMessage = "";
-                  }
-                }),
-              ).pipe(
-                Effect.andThen(() => emit.end()),
-                Effect.fork,
-              );
-            }),
+                return [contentEvent, StreamEvent.Message({ message })];
+              } else {
+                return [contentEvent];
+              }
+            });
+          },
         );
       },
     };
