@@ -6,6 +6,7 @@ import type { AssistantMessage, ThreadEvent } from "./thread-event";
 export interface StreamParams {
   readonly model: string;
   readonly events: ThreadEvent[];
+  readonly maxTokens?: number | undefined;
 }
 
 export type StreamEvent = Data.TaggedEnum<{

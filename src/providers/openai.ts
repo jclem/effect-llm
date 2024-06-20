@@ -65,6 +65,7 @@ export const make = (
             Http.request.jsonBody({
               model: params.model,
               messages: messagesFromEvents(params.events),
+              max_tokens: params.maxTokens,
               stream: true,
             }),
             Effect.flatMap(client),
