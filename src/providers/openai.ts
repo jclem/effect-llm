@@ -45,10 +45,10 @@ export const make = (
       ),
       Effect.map(
         Http.client.mapRequest(
-          Http.request.setHeader(
-            "Authorization",
-            `Bearer ${Redacted.value(config.apiKey)}`,
-          ),
+          Http.request.setHeaders({
+            Authorization: `Bearer ${Redacted.value(config.apiKey)}`,
+            "Content-Type": "application/json",
+          }),
         ),
       ),
     );
@@ -56,10 +56,6 @@ export const make = (
     return {
       stream(params: StreamParams) {
         return Http.request.post("/v1/chat/completions").pipe(
-          Http.request.setHeader(
-            "content-type",
-            "application/json; charset=utf-8",
-          ),
           Http.request.jsonBody({
             model: params.model,
             messages: messagesFromEvents(params.events),
