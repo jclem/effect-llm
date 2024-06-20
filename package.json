@@ -1,0 +1,33 @@
+{
+  "name": "@jclem/effect-ai",
+  "type": "module",
+  "scripts": {
+    "build": "pkgroll --sourcemap"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "exports": {
+    "require": {
+      "types": "./dist/index.d.cts",
+      "default": "./dist/index.cjs"
+    },
+    "import": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "dependencies": {
+    "@effect/platform": "^0.57.3",
+    "@effect/schema": "^0.68.0",
+    "effect": "^3.3.4",
+    "eventsource-parser": "^1.1.2"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "^0.36.12",
+    "@types/bun": "latest",
+    "pkgroll": "^2.1.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
