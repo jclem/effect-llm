@@ -1,10 +1,11 @@
+import type { ResponseError } from "@effect/platform/Http/ClientError";
 import * as Http from "@effect/platform/HttpClient";
 import { Schema as S } from "@effect/schema";
 import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
-import type { ParsedEvent } from "eventsource-parser";
+import type { UnknownException } from "effect/Cause";
 import { StreamEvent, type Provider, type StreamParams } from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
-import { Role, type ThreadEvent } from "../thread-event";
+import { AssistantMessage, Role, type ThreadEvent } from "../thread-event";
 
 export interface OpenAIConfig {
   apiKey: Redacted.Redacted<string>;
@@ -23,6 +24,7 @@ const ChatCompletionChunk = S.parseJson(
         delta: S.Struct({
           content: S.optional(S.String),
         }),
+        finish_reason: S.NullOr(S.Literal("stop")),
       }),
     ),
   }),
@@ -53,38 +55,63 @@ export const make = (
 
     return {
       stream(params: StreamParams) {
-        return Http.request.post("/v1/chat/completions").pipe(
-          Http.request.setHeader(
-            "content-type",
-            "application/json; charset=utf-8",
-          ),
-          Http.request.jsonBody({
-            model: params.model,
-            messages: messagesFromEvents(params.events),
-            stream: true,
-          }),
-          Effect.flatMap(client),
-          Effect.flatMap(streamSSE),
-          Effect.map(filterParsedEvents),
-          Effect.map(handleStreamEvent),
-        );
+        return Http.request
+          .post("/v1/chat/completions")
+          .pipe(
+            Http.request.setHeader(
+              "content-type",
+              "application/json; charset=utf-8",
+            ),
+            Http.request.jsonBody({
+              model: params.model,
+              messages: messagesFromEvents(params.events),
+              stream: true,
+            }),
+            Effect.flatMap(client),
+            Effect.flatMap(streamSSE),
+            Effect.map(filterParsedEvents),
+            Effect.map((stream) =>
+              Stream.asyncEffect<StreamEvent, ResponseError | UnknownException>(
+                (emit) => {
+                  let partialMessage = "";
+
+                  return Stream.runForEach(stream, (event) =>
+                    Effect.sync(function () {
+                      const chunkResult = decodeChatCompletionChunk(event.data);
+                      if (Option.isNone(chunkResult)) {
+                        return;
+                      }
+
+                      const choice = chunkResult.value.choices[0];
+                      const content = choice.delta.content ?? "";
+                      const chunk = StreamEvent.Content({ content });
+
+                      emit.single(chunk);
+
+                      partialMessage += chunk.content;
+
+                      if (choice.finish_reason === "stop") {
+                        emit.single(
+                          StreamEvent.Message({
+                            message: new AssistantMessage({
+                              content: partialMessage,
+                            }),
+                          }),
+                        );
+                      }
+                    }),
+                  ).pipe(
+                    Effect.andThen(() => emit.end()),
+                    Effect.fork,
+                  );
+                },
+              ),
+            ),
+          )
+          .pipe(Stream.unwrap);
       },
     };
   });
-
-const handleStreamEvent = Stream.filterMap((event: ParsedEvent) => {
-  const result = decodeChatCompletionChunk(event.data);
-
-  if (Option.isNone(result)) {
-    return Option.none();
-  }
-
-  return Option.some(
-    StreamEvent.Content({
-      content: result.value.choices[0].delta.content ?? "",
-    }),
-  );
-});
 
 const messagesFromEvents = Array.filterMap(
   Match.type<ThreadEvent>().pipe(
