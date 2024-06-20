@@ -1,5 +1,5 @@
 import * as Http from "@effect/platform/HttpClient";
-import { Data, Scope, Stream } from "effect";
+import { Context, Data, Stream, type Scope } from "effect";
 import type { UnknownException } from "effect/Cause";
 import type { AssistantMessage, ThreadEvent } from "./thread-event";
 
@@ -27,3 +27,8 @@ export interface Provider {
     Scope.Scope
   >;
 }
+
+export class Generation extends Context.Tag("Generation")<
+  Generation,
+  Provider
+>() {}
