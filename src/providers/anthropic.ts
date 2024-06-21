@@ -2,7 +2,15 @@ import type { BodyError } from "@effect/platform/Http/Body";
 import type { HttpClientError } from "@effect/platform/Http/ClientError";
 import * as Http from "@effect/platform/HttpClient";
 import { JSONSchema, Schema as S } from "@effect/schema";
-import { Array, Effect, Match, Option, Redacted, Scope, Stream } from "effect";
+import {
+  Array,
+  Effect,
+  Match,
+  Option,
+  Redacted,
+  Stream,
+  type Scope,
+} from "effect";
 import type { NonEmptyArray } from "effect/Array";
 import type { UnknownException } from "effect/Cause";
 import {
