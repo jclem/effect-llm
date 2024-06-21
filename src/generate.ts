@@ -53,6 +53,17 @@ export interface Provider {
     | UnknownException,
     Scope.Scope
   >;
+
+  readonly streamTools: (
+    params: StreamParams,
+  ) => Stream.Stream<
+    StreamEvent,
+    | Http.error.HttpClientError
+    | Http.error.ResponseError
+    | Http.body.BodyError
+    | UnknownException,
+    Scope.Scope
+  >;
 }
 
 export class Generation extends Context.Tag("Generation")<

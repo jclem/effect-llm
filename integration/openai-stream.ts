@@ -12,12 +12,12 @@ const openAIProvider = Config.redacted("OPENAI_API_KEY").pipe(
 
 const streamTools = Generation.pipe(
   Effect.map((gen) =>
-    gen.stream({
+    gen.streamTools({
       model: OpenAI.Model.GPT4o,
       events: [
         new UserMessage({
           content:
-            'Say hello with TEXT only (not a function), and then use a function to say "Greetings"',
+            'Say hello with TEXT only (not a function), and then use a function to say "Greetings".',
         }),
       ],
       functions: [

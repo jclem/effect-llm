@@ -12,7 +12,7 @@ const anthropicProvider = Config.redacted("ANTHROPIC_API_KEY").pipe(
 
 Generation.pipe(
   Effect.map((gen) =>
-    gen.stream({
+    gen.streamTools({
       model: Anthropic.Model.Claude35Sonnet,
       maxTokens: 1024,
       events: [

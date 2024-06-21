@@ -1,7 +1,18 @@
+import type { BodyError } from "@effect/platform/Http/Body";
+import type { HttpClientError } from "@effect/platform/Http/ClientError";
 import * as Http from "@effect/platform/HttpClient";
-import { JSONSchema, Schema as S } from "@effect/schema";
-import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
+import { JSONSchema, Schema as S, Schema } from "@effect/schema";
+import {
+  Array,
+  Effect,
+  Match,
+  Option,
+  Redacted,
+  Stream,
+  type Scope,
+} from "effect";
 import type { NonEmptyArray } from "effect/Array";
+import type { UnknownException } from "effect/Cause";
 import {
   StreamEvent,
   type FunctionDefinition,
@@ -9,7 +20,13 @@ import {
   type StreamParams,
 } from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
-import { AssistantMessage, Role, type ThreadEvent } from "../thread-event";
+import {
+  AssistantMessage,
+  Role,
+  ToolResultEvent,
+  ToolUseEvent,
+  type ThreadEvent,
+} from "../thread-event";
 
 export interface OpenAIConfig {
   apiKey: Redacted.Redacted<string>;
@@ -74,6 +91,89 @@ export const make = (
     );
 
     return {
+      streamTools(params: StreamParams) {
+        const fnCalls: Extract<
+          StreamEvent,
+          { _tag: "FunctionCall" }
+        >["functionCall"][] = [];
+
+        return Stream.asyncEffect<
+          StreamEvent,
+          HttpClientError | BodyError | UnknownException,
+          Scope.Scope
+        >((emit) => {
+          const single = (event: StreamEvent) =>
+            Effect.promise(() => emit.single(event));
+          const end = () => Effect.promise(() => emit.end());
+          const fail = (
+            error: HttpClientError | BodyError | UnknownException,
+          ) => Effect.promise(() => emit.fail(error));
+
+          return this.stream(params).pipe(
+            Stream.runForEach((event) => {
+              if (event._tag === "FunctionCall") {
+                fnCalls.push(event.functionCall);
+              }
+
+              return Effect.promise(() => emit.single(event));
+            }),
+            Effect.andThen(() =>
+              Effect.gen(this, function* () {
+                if (fnCalls.length === 0) {
+                  return yield* end();
+                }
+
+                const newEvents: ThreadEvent[] = [];
+
+                for (const fnCall of fnCalls) {
+                  const fnDefn = Array.findFirst(
+                    params.functions ?? [],
+                    (f) => f.name === fnCall.name,
+                  ).pipe(
+                    Option.getOrThrowWith(() => new Error("No function found")),
+                  );
+
+                  const input = yield* Schema.decodeUnknown(
+                    Schema.parseJson(fnDefn.input),
+                  )(fnCall.arguments);
+
+                  const toolCallEvent = new ToolUseEvent({
+                    id: fnCall.id,
+                    name: fnCall.name,
+                    input,
+                  });
+
+                  const output = yield* fnDefn.function(input);
+
+                  const toolResultEvent = new ToolResultEvent({
+                    id: fnCall.id,
+                    output,
+                  });
+
+                  newEvents.push(toolCallEvent, toolResultEvent);
+                }
+
+                if (newEvents.length === 0) {
+                  return;
+                }
+
+                const newParams: StreamParams = {
+                  ...params,
+                  events: [...params.events, ...newEvents],
+                };
+
+                yield* this.streamTools(newParams).pipe(
+                  Stream.runForEach((e) => single(e)),
+                );
+              }),
+            ),
+            Effect.catchAll((err) => fail(err)),
+            Effect.andThen(() => end()),
+            Effect.fork,
+          );
+        });
+      },
+
       stream(params: StreamParams) {
         return Http.request.post("/v1/chat/completions").pipe(
           Http.request.jsonBody({
@@ -195,7 +295,7 @@ const messagesFromEvents = Array.filterMap(
               type: "function",
               function: {
                 name: event.name,
-                arguments: event.input,
+                arguments: JSON.stringify(event.input),
               },
             },
           ],
@@ -204,7 +304,7 @@ const messagesFromEvents = Array.filterMap(
         Option.some({
           role: "tool",
           tool_call_id: event.id,
-          content: event.output,
+          content: JSON.stringify(event.output),
         }),
     }),
     Match.exhaustive,
