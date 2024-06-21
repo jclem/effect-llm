@@ -168,14 +168,15 @@ export const make = (
                   content_block_delta: (event) => {
                     switch (event.delta.type) {
                       case "text_delta": {
-                        const block = blocks.find(
+                        const block = Array.findFirst(
+                          blocks,
                           (s): s is TextBlock =>
                             s.index === event.index && s.type === "text",
+                        ).pipe(
+                          Option.getOrThrowWith(
+                            () => new Error("No text block found"),
+                          ),
                         );
-
-                        if (!block) {
-                          throw new Error("No content block found");
-                        }
 
                         block.text += event.delta.text;
 
@@ -184,14 +185,15 @@ export const make = (
                         ];
                       }
                       case "input_json_delta": {
-                        const block = blocks.find(
+                        const block = Array.findFirst(
+                          blocks,
                           (s): s is ToolBlock =>
                             s.index === event.index && s.type === "toolUse",
+                        ).pipe(
+                          Option.getOrThrowWith(
+                            () => new Error("No tool use block found"),
+                          ),
                         );
-
-                        if (!block) {
-                          throw new Error("No content block found");
-                        }
 
                         block.toolUse.input += event.delta.partial_json;
 
