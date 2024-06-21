@@ -1,7 +1,13 @@
 import * as Http from "@effect/platform/HttpClient";
-import { Schema as S } from "@effect/schema";
+import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
-import { StreamEvent, type Provider, type StreamParams } from "../generate";
+import type { NonEmptyArray } from "effect/Array";
+import {
+  StreamEvent,
+  type FunctionDefinition,
+  type Provider,
+  type StreamParams,
+} from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread-event";
 
@@ -20,9 +26,23 @@ const ChatCompletionChunk = S.parseJson(
     choices: S.NonEmptyArray(
       S.Struct({
         delta: S.Struct({
-          content: S.optional(S.String),
+          role: S.optional(S.NullOr(S.Literal("assistant"))),
+          content: S.optional(S.NullOr(S.String)),
+          tool_calls: S.optional(
+            S.Array(
+              S.Struct({
+                id: S.optional(S.String),
+                type: S.optional(S.Literal("function")),
+                index: S.Int,
+                function: S.Struct({
+                  name: S.optional(S.String),
+                  arguments: S.String,
+                }),
+              }),
+            ),
+          ),
         }),
-        finish_reason: S.NullOr(S.Literal("stop")),
+        finish_reason: S.NullOr(S.Literal("stop", "tool_calls")),
       }),
     ),
   }),
@@ -61,6 +81,7 @@ export const make = (
             messages: messagesFromEvents(params.events),
             max_tokens: params.maxTokens,
             stream: true,
+            tools: params.functions ? gatherTools(params.functions) : undefined,
           }),
           Effect.flatMap(client),
           Effect.flatMap(streamSSE),
@@ -69,31 +90,83 @@ export const make = (
           Stream.filterMap((e) => decodeChatCompletionChunk(e.data)),
           (stream) => {
             let partialMessage = "";
+            const partialToolCalls = new Map<
+              number,
+              { id: string; name: string; arguments: string }
+            >();
 
             return Stream.mapConcat(stream, (event) => {
               const choice = event.choices[0];
-              const content = choice.delta.content ?? "";
-              const contentEvent = StreamEvent.Content({ content });
+              const content = choice.delta.content;
+              const toolCall = choice.delta.tool_calls?.at(0);
 
-              partialMessage += content;
+              const events: StreamEvent[] = [];
 
-              if (choice.finish_reason === "stop") {
-                const message = new AssistantMessage({
-                  content: partialMessage,
-                });
-
-                partialMessage = "";
-
-                return [contentEvent, StreamEvent.Message({ message })];
-              } else {
-                return [contentEvent];
+              if (content != null) {
+                partialMessage += content;
+                events.push(StreamEvent.Content({ content }));
               }
+
+              if (toolCall != null) {
+                const tool = partialToolCalls.get(toolCall.index) ?? {
+                  id: "",
+                  name: "",
+                  arguments: "",
+                };
+                tool.id ||= toolCall.id ?? "";
+                tool.name ||= toolCall.function.name ?? "";
+                tool.arguments += toolCall.function.arguments;
+                partialToolCalls.set(toolCall.index, tool);
+              }
+
+              if (choice.finish_reason != null || toolCall != null) {
+                if (partialMessage.length > 0) {
+                  events.push(
+                    StreamEvent.Message({
+                      message: new AssistantMessage({
+                        content: partialMessage,
+                      }),
+                    }),
+                  );
+                  partialMessage = "";
+                }
+              }
+
+              if (choice.finish_reason != null) {
+                for (const tool of partialToolCalls.values()) {
+                  events.push(
+                    StreamEvent.FunctionCall({
+                      functionCall: {
+                        id: tool.id,
+                        name: tool.name,
+                        arguments: tool.arguments,
+                      },
+                    }),
+                  );
+                }
+              }
+
+              return events;
             });
           },
         );
       },
     };
   });
+
+const gatherTools = (
+  tools: NonEmptyArray<
+    FunctionDefinition<string, unknown, unknown, unknown, unknown>
+  >,
+) =>
+  tools.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: JSONSchema.make(tool.input),
+    },
+  }));
 
 const messagesFromEvents = Array.filterMap(
   Match.type<ThreadEvent>().pipe(
