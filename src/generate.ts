@@ -7,6 +7,7 @@ import type { AssistantMessage, ThreadEvent } from "./thread-event";
 
 export interface StreamParams {
   readonly model: string;
+  readonly system?: string | undefined;
   readonly events: ThreadEvent[];
   readonly maxTokens?: number | undefined;
   readonly functions?:

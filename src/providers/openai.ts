@@ -186,7 +186,27 @@ const messagesFromEvents = Array.filterMap(
           role: Role.Assistant,
           content: message.content,
         }),
+      ToolUseEvent: (event) =>
+        Option.some({
+          role: Role.Assistant,
+          tool_calls: [
+            {
+              id: event.id,
+              type: "function",
+              function: {
+                name: event.name,
+                arguments: event.input,
+              },
+            },
+          ],
+        }),
+      ToolResultEvent: (event) =>
+        Option.some({
+          role: "tool",
+          tool_call_id: event.id,
+          content: event.output,
+        }),
     }),
-    Match.orElse(() => Option.none()),
+    Match.exhaustive,
   ),
 );

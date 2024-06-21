@@ -118,6 +118,7 @@ export const make = (
           Http.request.jsonBody({
             // TODO: Handle system messages
             model: params.model,
+            system: params.system,
             messages: messagesFromEvents(params.events),
             max_tokens: params.maxTokens,
             stream: true,
@@ -261,6 +262,29 @@ const messagesFromEvents = Array.filterMap(
           role: Role.Assistant,
           content: message.content,
         }),
+      ToolUseEvent: (event) =>
+        Option.some({
+          role: Role.Assistant,
+          content: [
+            {
+              type: "tool_use",
+              id: event.id,
+              name: event.name,
+              input: event.input,
+            },
+          ],
+        }),
+      ToolResultEvent: (event) =>
+        Option.some({
+          role: Role.User,
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: event.id,
+              content: event.output,
+            },
+          ],
+        }),
     }),
     Match.orElse(() => Option.none()),
   ),
@@ -276,38 +300,3 @@ const gatherTools = (
     description: tool.description,
     input_schema: JSONSchema.make(tool.input),
   }));
-
-// Stream.mapAccum<
-//   {
-//     partialMessage: string;
-//     toolUse: { name: string; inputs: string } | null;
-//   },
-//   ContentBlockEvent,
-//   StreamEvent
-// >({ partialMessage: "", toolUse: null }, (accum, event) => {
-//   return Match.type<ContentBlockEvent>().pipe(
-//     Match.discriminators("type")({
-//       content_block_start: (block) => {
-//         return [accum, []] as const;
-//       },
-//       content_block_delta: (b) => {
-//         return [
-//           {
-//             ...accum,
-//             partialMessage: accum.partialMessage + b.delta.text,
-//           },
-//           StreamEvent.Content({ content: b.delta.text }),
-//         ] as const;
-//       },
-//       content_block_stop: () => {
-//         return [
-//           { ...accum, partialMessage: "" },
-//           StreamEvent.Message({
-//             message: new AssistantMessage({ content: accum }),
-//           }),
-//         ] as const;
-//       },
-//     }),
-//     Match.exhaustive,
-//   )(event);
-// }),
