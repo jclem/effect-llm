@@ -1,6 +1,6 @@
 {
   "name": "@jclem/effect-llm",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "An Effect wrapper around some LLM APIs",
   "license": "MIT",
   "author": "Jonathan Clem <j@jclem.me> (https://jclem.me)",
@@ -20,7 +20,8 @@
   "bugs": "https://github.com/jclem/effect-llm/issues",
   "type": "module",
   "scripts": {
-    "build": "pkgroll --sourcemap --clean-dist"
+    "build": "pkgroll --sourcemap --clean-dist",
+    "publish-package": "bun run build && npm publish"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
