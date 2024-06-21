@@ -1,5 +1,23 @@
 {
-  "name": "@jclem/effect-ai",
+  "name": "@jclem/effect-llm",
+  "version": "0.0.1",
+  "description": "An Effect wrapper around some LLM APIs",
+  "license": "MIT",
+  "author": "Jonathan Clem <j@jclem.me> (https://jclem.me)",
+  "homepage": "https://github.com/jclem/effect-llm",
+  "keywords": [
+    "effect",
+    "ai",
+    "llm"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jclem/effect-llm.git"
+  },
+  "bugs": "https://github.com/jclem/effect-llm/issues",
   "type": "module",
   "scripts": {
     "build": "pkgroll --sourcemap --clean-dist"
