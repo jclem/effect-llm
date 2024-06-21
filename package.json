@@ -2,7 +2,7 @@
   "name": "@jclem/effect-ai",
   "type": "module",
   "scripts": {
-    "build": "pkgroll --sourcemap"
+    "build": "pkgroll --sourcemap --clean-dist"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
