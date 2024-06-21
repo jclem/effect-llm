@@ -20,8 +20,7 @@
   "bugs": "https://github.com/jclem/effect-llm/issues",
   "type": "module",
   "scripts": {
-    "build": "pkgroll --sourcemap --clean-dist",
-    "publish": "bun run build && npm publish"
+    "build": "pkgroll --sourcemap --clean-dist"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
