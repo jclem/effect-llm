@@ -1,6 +1,6 @@
 {
   "name": "@jclem/effect-llm",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "An Effect wrapper around some LLM APIs",
   "license": "MIT",
   "author": "Jonathan Clem <j@jclem.me> (https://jclem.me)",
@@ -36,14 +36,14 @@
     }
   },
   "dependencies": {
-    "@effect/platform": "^0.57.3",
-    "@effect/schema": "^0.68.0",
+    "@effect/platform": "^0.58.2",
+    "@effect/schema": "^0.68.5",
     "@jclem/assert": "^3.1.0",
-    "effect": "^3.3.4",
+    "effect": "^3.4.0",
     "eventsource-parser": "^1.1.2"
   },
   "devDependencies": {
-    "@effect/platform-bun": "^0.36.12",
+    "@effect/platform-bun": "^0.38.1",
     "@types/bun": "latest",
     "pkgroll": "^2.1.1"
   },

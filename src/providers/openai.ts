@@ -1,4 +1,4 @@
-import * as Http from "@effect/platform/HttpClient";
+import { HttpClient, HttpClientRequest } from "@effect/platform";
 import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
 import type { NonEmptyArray } from "effect/Array";
@@ -54,18 +54,18 @@ const decodeChatCompletionChunk = S.decodeUnknownOption(ChatCompletionChunk);
 
 export const make = (
   config: OpenAIConfig,
-): Effect.Effect<Provider, never, Http.client.Client.Default> =>
+): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
   Effect.gen(function* () {
-    const client = yield* Http.client.Client.pipe(
-      Effect.map(Http.client.filterStatusOk),
+    const client = yield* HttpClient.HttpClient.pipe(
+      Effect.map(HttpClient.filterStatusOk),
       Effect.map(
-        Http.client.mapRequest(
-          Http.request.prependUrl("https://api.openai.com"),
+        HttpClient.mapRequest(
+          HttpClientRequest.prependUrl("https://api.openai.com"),
         ),
       ),
       Effect.map(
-        Http.client.mapRequest(
-          Http.request.setHeaders({
+        HttpClient.mapRequest(
+          HttpClientRequest.setHeaders({
             Authorization: `Bearer ${Redacted.value(config.apiKey)}`,
             "Content-Type": "application/json",
           }),
@@ -75,8 +75,8 @@ export const make = (
 
     return {
       stream(params: StreamParams) {
-        return Http.request.post("/v1/chat/completions").pipe(
-          Http.request.jsonBody({
+        return HttpClientRequest.post("/v1/chat/completions").pipe(
+          HttpClientRequest.jsonBody({
             model: params.model,
             messages: messagesFromEvents(params.events),
             max_tokens: params.maxTokens,

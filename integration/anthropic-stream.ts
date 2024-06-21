@@ -1,5 +1,5 @@
+import { HttpClient } from "@effect/platform";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
-import * as Http from "@effect/platform/HttpClient";
 import { Schema } from "@effect/schema";
 import { Config, Effect, Layer, Stream } from "effect";
 import { Generation, defineFunction, streamTools } from "../src/generate";
@@ -42,6 +42,6 @@ streamTools({
   Effect.scoped,
   Effect.provide(Layer.effect(Generation, anthropicProvider)),
   Effect.provide(BunContext.layer),
-  Effect.provide(Http.client.layer),
+  Effect.provide(HttpClient.layer),
   BunRuntime.runMain,
 );

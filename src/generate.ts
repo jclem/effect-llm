@@ -1,6 +1,8 @@
-import type { BodyError } from "@effect/platform/Http/Body";
-import type { HttpClientError } from "@effect/platform/Http/ClientError";
-import * as Http from "@effect/platform/HttpClient";
+import type { HttpBodyError } from "@effect/platform/HttpBody";
+import type {
+  HttpClientError,
+  ResponseError,
+} from "@effect/platform/HttpClientError";
 import { Schema } from "@effect/schema";
 import {
   Array,
@@ -62,10 +64,7 @@ export interface Provider {
     params: StreamParams,
   ) => Stream.Stream<
     StreamEvent,
-    | Http.error.HttpClientError
-    | Http.error.ResponseError
-    | Http.body.BodyError
-    | UnknownException,
+    HttpClientError | ResponseError | HttpBodyError | UnknownException,
     Scope.Scope
   >;
 }
@@ -79,7 +78,7 @@ export function streamTools(
   params: StreamParams,
 ): Stream.Stream<
   StreamEvent,
-  HttpClientError | BodyError | UnknownException,
+  HttpClientError | HttpBodyError | UnknownException,
   Scope.Scope
 > {
   const fnCalls: Extract<
@@ -89,13 +88,13 @@ export function streamTools(
 
   return Stream.asyncEffect<
     StreamEvent,
-    HttpClientError | BodyError | UnknownException,
+    HttpClientError | HttpBodyError | UnknownException,
     Scope.Scope
   >((emit) => {
     const single = (event: StreamEvent) =>
       Effect.promise(() => emit.single(event));
     const end = () => Effect.promise(() => emit.end());
-    const fail = (error: HttpClientError | BodyError | UnknownException) =>
+    const fail = (error: HttpClientError | HttpBodyError | UnknownException) =>
       Effect.promise(() => emit.fail(error));
 
     return Generation.pipe(

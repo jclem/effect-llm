@@ -1,4 +1,5 @@
-import * as Http from "@effect/platform/HttpClient";
+import { HttpClientResponse } from "@effect/platform";
+import type { ResponseError } from "@effect/platform/HttpClientError";
 import { Data, Effect, Exit, Match, Queue, Stream } from "effect";
 import { UnknownException } from "effect/Cause";
 import {
@@ -9,7 +10,7 @@ import {
 
 type SSEQueueEvent = Data.TaggedEnum<{
   Event: { readonly event: ParseEvent };
-  Error: { readonly error: Http.error.ResponseError | UnknownException };
+  Error: { readonly error: ResponseError | UnknownException };
 }>;
 
 const SSEQueueEvent = Data.taggedEnum<SSEQueueEvent>();
@@ -17,7 +18,7 @@ const SSEQueueEvent = Data.taggedEnum<SSEQueueEvent>();
 /**
  * Read a client response as a stream of server-sent events.
  */
-export const streamSSE = (response: Http.response.ClientResponse) =>
+export const streamSSE = (response: HttpClientResponse.HttpClientResponse) =>
   Effect.gen(function* () {
     const queue = yield* Queue.unbounded<SSEQueueEvent>();
     const parser = createParser((event) =>
@@ -26,7 +27,7 @@ export const streamSSE = (response: Http.response.ClientResponse) =>
 
     const fiberId = yield* Effect.forkScoped(
       Effect.succeed(response).pipe(
-        Http.response.stream,
+        HttpClientResponse.stream,
         Stream.decodeText("utf-8"),
         Stream.runForEach((chunk) =>
           Effect.sync(() => {

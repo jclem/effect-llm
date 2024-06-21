@@ -1,6 +1,6 @@
-import type { BodyError } from "@effect/platform/Http/Body";
-import type { HttpClientError } from "@effect/platform/Http/ClientError";
-import * as Http from "@effect/platform/HttpClient";
+import { HttpClient, HttpClientRequest } from "@effect/platform";
+import type { HttpBodyError } from "@effect/platform/HttpBody";
+import type { HttpClientError } from "@effect/platform/HttpClientError";
 import { JSONSchema, Schema as S } from "@effect/schema";
 import {
   Array,
@@ -92,18 +92,18 @@ const decodeContentBlockEvent = S.decodeUnknownOption(ContentBlockEvent);
 
 export const make = (
   config: AnthropicConfig,
-): Effect.Effect<Provider, never, Http.client.Client.Default> =>
+): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
   Effect.gen(function* () {
-    const client = yield* Http.client.Client.pipe(
-      Effect.map(Http.client.filterStatusOk),
+    const client = yield* HttpClient.HttpClient.pipe(
+      Effect.map(HttpClient.filterStatusOk),
       Effect.map(
-        Http.client.mapRequest(
-          Http.request.prependUrl("https://api.anthropic.com"),
+        HttpClient.mapRequest(
+          HttpClientRequest.prependUrl("https://api.anthropic.com"),
         ),
       ),
       Effect.map(
-        Http.client.mapRequest(
-          Http.request.setHeaders({
+        HttpClient.mapRequest(
+          HttpClientRequest.setHeaders({
             "X-API-Key": Redacted.value(config.apiKey),
             "Anthropic-Version": "2023-06-01",
             "Content-Type": "application/json",
@@ -114,8 +114,8 @@ export const make = (
 
     return {
       stream(params: StreamParams) {
-        return Http.request.post("/v1/messages").pipe(
-          Http.request.jsonBody({
+        return HttpClientRequest.post("/v1/messages").pipe(
+          HttpClientRequest.jsonBody({
             // TODO: Handle system messages
             model: params.model,
             system: params.system,
@@ -145,7 +145,7 @@ export const make = (
 
             return Stream.mapConcat<
               ContentBlockEvent,
-              HttpClientError | BodyError | UnknownException,
+              HttpClientError | HttpBodyError | UnknownException,
               Scope.Scope,
               StreamEvent
             >(
