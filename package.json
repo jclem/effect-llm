@@ -23,16 +23,46 @@
     "build": "pkgroll --sourcemap --clean-dist",
     "publish-package": "bun run build && npm publish"
   },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
   "exports": {
-    "require": {
-      "types": "./dist/index.d.cts",
-      "default": "./dist/index.cjs"
+    "./generate": {
+      "import": {
+        "types": "./dist/generate.d.ts",
+        "default": "./dist/generate.mjs"
+      },
+      "require": {
+        "types": "./dist/generate.d.ts",
+        "default": "./dist/generate.cjs"
+      }
     },
-    "import": {
-      "types": "./dist/index.d.mts",
-      "default": "./dist/index.mjs"
+    "./thread": {
+      "import": {
+        "types": "./dist/thread.d.ts",
+        "default": "./dist/thread.mjs"
+      },
+      "require": {
+        "types": "./dist/thread.d.ts",
+        "default": "./dist/thread.cjs"
+      }
+    },
+    "./providers/anthropic": {
+      "import": {
+        "types": "./dist/providers/anthropic.d.ts",
+        "default": "./dist/providers/anthropic.mjs"
+      },
+      "require": {
+        "types": "./dist/providers/anthropic.d.ts",
+        "default": "./dist/providers/anthropic.cjs"
+      }
+    },
+    "./providers/openai": {
+      "import": {
+        "types": "./dist/providers/openai.d.ts",
+        "default": "./dist/providers/openai.mjs"
+      },
+      "require": {
+        "types": "./dist/providers/openai.d.ts",
+        "default": "./dist/providers/openai.cjs"
+      }
     }
   },
   "dependencies": {

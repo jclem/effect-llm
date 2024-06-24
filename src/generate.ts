@@ -20,7 +20,7 @@ import {
   ToolUseEvent,
   type AssistantMessage,
   type ThreadEvent,
-} from "./thread-event";
+} from "./thread";
 
 export interface StreamParams {
   readonly model: string;

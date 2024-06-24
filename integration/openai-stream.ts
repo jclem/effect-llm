@@ -4,7 +4,7 @@ import { Schema } from "@effect/schema";
 import { Config, Effect, Layer, Stream } from "effect";
 import { Generation, defineFunction, streamTools } from "../src/generate";
 import * as OpenAI from "../src/providers/openai";
-import { UserMessage } from "../src/thread-event";
+import { UserMessage } from "../src/thread";
 
 const openAIProvider = Config.redacted("OPENAI_API_KEY").pipe(
   Effect.flatMap((apiKey) => OpenAI.make({ apiKey })),

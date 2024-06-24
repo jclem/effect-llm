@@ -9,7 +9,7 @@ import {
   type StreamParams,
 } from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
-import { AssistantMessage, Role, type ThreadEvent } from "../thread-event";
+import { AssistantMessage, Role, type ThreadEvent } from "../thread";
 
 export interface OpenAIConfig {
   apiKey: Redacted.Redacted<string>;

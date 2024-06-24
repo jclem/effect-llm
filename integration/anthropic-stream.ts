@@ -4,7 +4,7 @@ import { Schema } from "@effect/schema";
 import { Config, Effect, Layer, Stream } from "effect";
 import { Generation, defineFunction, streamTools } from "../src/generate";
 import * as Anthropic from "../src/providers/anthropic";
-import { UserMessage } from "../src/thread-event";
+import { UserMessage } from "../src/thread";
 
 const anthropicProvider = Config.redacted("ANTHROPIC_API_KEY").pipe(
   Effect.flatMap((apiKey) => Anthropic.make({ apiKey })),
