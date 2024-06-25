@@ -1,6 +1,6 @@
 {
   "name": "@jclem/effect-llm",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "An Effect wrapper around some LLM APIs",
   "license": "MIT",
   "author": "Jonathan Clem <j@jclem.me> (https://jclem.me)",
@@ -20,60 +20,12 @@
   "bugs": "https://github.com/jclem/effect-llm/issues",
   "type": "module",
   "scripts": {
-    "build": "pkgroll --sourcemap --clean-dist",
+    "build": "tsc --outDir dist",
     "publish-package": "bun run build && npm publish"
   },
   "exports": {
-    ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
-      },
-      "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.cjs"
-      }
-    },
-    "./generate": {
-      "import": {
-        "types": "./dist/generate.d.ts",
-        "default": "./dist/generate.mjs"
-      },
-      "require": {
-        "types": "./dist/generate.d.ts",
-        "default": "./dist/generate.cjs"
-      }
-    },
-    "./thread": {
-      "import": {
-        "types": "./dist/thread.d.ts",
-        "default": "./dist/thread.mjs"
-      },
-      "require": {
-        "types": "./dist/thread.d.ts",
-        "default": "./dist/thread.cjs"
-      }
-    },
-    "./providers/anthropic": {
-      "import": {
-        "types": "./dist/providers/anthropic.d.ts",
-        "default": "./dist/providers/anthropic.mjs"
-      },
-      "require": {
-        "types": "./dist/providers/anthropic.d.ts",
-        "default": "./dist/providers/anthropic.cjs"
-      }
-    },
-    "./providers/openai": {
-      "import": {
-        "types": "./dist/providers/openai.d.ts",
-        "default": "./dist/providers/openai.mjs"
-      },
-      "require": {
-        "types": "./dist/providers/openai.d.ts",
-        "default": "./dist/providers/openai.cjs"
-      }
-    }
+    "types": "./dist/src/index.d.ts",
+    "default": "./dist/src/index.mjs"
   },
   "dependencies": {
     "@effect/platform": "^0.58.2",
@@ -84,8 +36,7 @@
   },
   "devDependencies": {
     "@effect/platform-bun": "^0.38.1",
-    "@types/bun": "latest",
-    "pkgroll": "^2.1.1"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
