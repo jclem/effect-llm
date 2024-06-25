@@ -1,6 +1,6 @@
 {
   "name": "@jclem/effect-llm",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "An Effect wrapper around some LLM APIs",
   "license": "MIT",
   "author": "Jonathan Clem <j@jclem.me> (https://jclem.me)",
@@ -24,8 +24,8 @@
     "publish-package": "bun run build && npm publish"
   },
   "exports": {
-    "types": "./dist/src/index.d.ts",
-    "default": "./dist/src/index.mjs"
+    "types": "./dist/index.d.ts",
+    "default": "./dist/index.mjs"
   },
   "dependencies": {
     "@effect/platform": "^0.58.2",
