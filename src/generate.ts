@@ -25,10 +25,12 @@ import {
 export interface StreamParams {
   readonly model: string;
   readonly system?: string | undefined;
-  readonly events: ThreadEvent[];
+  readonly events: readonly ThreadEvent[];
   readonly maxTokens?: number | undefined;
   readonly functions?:
-    | NonEmptyArray<FunctionDefinition<any, any, any, any, any, any, any>>
+    | Readonly<
+        NonEmptyArray<FunctionDefinition<any, any, any, any, any, any, any>>
+      >
     | undefined;
 }
 

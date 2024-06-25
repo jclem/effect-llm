@@ -155,15 +155,17 @@ export const make = (
   });
 
 const gatherTools = (
-  tools: NonEmptyArray<
-    FunctionDefinition<
-      string,
-      unknown,
-      unknown,
-      unknown,
-      unknown,
-      unknown,
-      unknown
+  tools: Readonly<
+    NonEmptyArray<
+      FunctionDefinition<
+        string,
+        unknown,
+        unknown,
+        unknown,
+        unknown,
+        unknown,
+        unknown
+      >
     >
   >,
 ) =>
