@@ -28,21 +28,21 @@ export interface StreamParams {
   readonly events: ThreadEvent[];
   readonly maxTokens?: number | undefined;
   readonly functions?:
-    | NonEmptyArray<FunctionDefinition<any, any, any, any, any>>
+    | NonEmptyArray<FunctionDefinition<any, any, any, any, any, any, any>>
     | undefined;
 }
 
-export interface FunctionDefinition<Name extends string, A, O, E, R> {
+export interface FunctionDefinition<Name extends string, SA, SI, SR, A, E, R> {
   readonly name: Name;
   readonly description?: string | undefined;
-  readonly input: Schema.Schema<A, any, any>;
-  readonly function: (input: A) => Effect.Effect<O, E, R>;
+  readonly input: Schema.Schema<SA, SI, SR>;
+  readonly function: (input: A) => Effect.Effect<A, E, R>;
 }
 
-export function defineFunction<Name extends string, A, O, E, R>(
+export function defineFunction<Name extends string, SA, SI, SR, A, E, R>(
   name: Name,
-  definition: Omit<FunctionDefinition<Name, A, O, E, R>, "name">,
-): FunctionDefinition<Name, A, O, E, R> {
+  definition: Omit<FunctionDefinition<Name, SA, SI, SR, A, E, R>, "name">,
+): FunctionDefinition<Name, SA, SI, SR, A, E, R> {
   return { ...definition, name };
 }
 

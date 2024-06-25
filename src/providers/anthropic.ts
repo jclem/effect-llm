@@ -292,7 +292,15 @@ const messagesFromEvents = Array.filterMap(
 
 const gatherTools = (
   tools: NonEmptyArray<
-    FunctionDefinition<string, unknown, unknown, unknown, unknown>
+    FunctionDefinition<
+      string,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown
+    >
   >,
 ) =>
   tools.map((tool) => ({
