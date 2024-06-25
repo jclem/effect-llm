@@ -1,4 +1,3 @@
 export * as Generate from "./generate";
-export * as Anthropic from "./providers/anthropic";
-export * as OpenAI from "./providers/openai";
+export * as Providers from "./providers";
 export * as Thread from "./thread";
