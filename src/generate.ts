@@ -36,7 +36,7 @@ export interface FunctionDefinition<Name extends string, SA, SI, SR, A, E, R> {
   readonly name: Name;
   readonly description?: string | undefined;
   readonly input: Schema.Schema<SA, SI, SR>;
-  readonly function: (input: A) => Effect.Effect<A, E, R>;
+  readonly function: (input: SA) => Effect.Effect<A, E, R>;
 }
 
 export function defineFunction<Name extends string, SA, SI, SR, A, E, R>(
