@@ -247,45 +247,111 @@ export const make = (
     };
   });
 
-const messagesFromEvents = Array.filterMap(
-  Match.type<ThreadEvent>().pipe(
-    Match.tags({
-      UserMessage: (message) =>
-        Option.some({
-          role: Role.User,
-          content: message.content,
-        }),
-      AssistantMessage: (message) =>
-        Option.some({
-          role: Role.Assistant,
-          content: message.content,
-        }),
-      ToolUseEvent: (event) =>
-        Option.some({
-          role: Role.Assistant,
-          content: [
-            {
-              type: "tool_use",
-              id: event.id,
-              name: event.name,
-              input: event.input,
-            },
-          ],
-        }),
-      ToolResultEvent: (event) =>
-        Option.some({
-          role: Role.User,
-          content: [
-            {
-              type: "tool_result",
-              tool_use_id: event.id,
-              content: JSON.stringify(event.output),
-            },
-          ],
-        }),
-    }),
-    Match.orElse(() => Option.none()),
-  ),
+type AnthropicUserMessage = {
+  role: Role.User;
+  content: (
+    | { type: "text"; content: string }
+    | { type: "tool_result"; tool_use_id: string; content: string }
+  )[];
+};
+
+type AnthropicAssistantMessage = {
+  role: Role.Assistant;
+  content: (
+    | { type: "text"; content: string }
+    | { type: "tool_use"; id: string; name: string; input: unknown }
+  )[];
+};
+
+type Message = AnthropicUserMessage | AnthropicAssistantMessage;
+
+const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
+  [],
+  (messages, event) =>
+    Match.type<ThreadEvent>().pipe(
+      Match.tags({
+        UserMessage: (message) => {
+          const lastMessage = messages.at(-1);
+
+          if (lastMessage?.role === Role.User) {
+            return messages.slice(0, -1).concat({
+              ...lastMessage,
+              content: lastMessage.content.concat({
+                type: "text",
+                content: message.content,
+              }),
+            });
+          } else {
+            return messages.concat({
+              role: Role.User,
+              content: [{ type: "text", content: message.content }],
+            });
+          }
+        },
+        AssistantMessage: (message) => {
+          const lastMessage = messages.at(-1);
+
+          if (lastMessage?.role === Role.Assistant) {
+            return messages.slice(0, -1).concat({
+              ...lastMessage,
+              content: lastMessage.content.concat({
+                type: "text",
+                content: message.content,
+              }),
+            });
+          } else {
+            return messages.concat({
+              role: Role.Assistant,
+              content: [{ type: "text", content: message.content }],
+            });
+          }
+        },
+        ToolUseEvent: (event) => {
+          const lastMessage = messages.at(-1);
+
+          const chunk = {
+            type: "tool_use" as const,
+            id: event.id,
+            name: event.name,
+            input: event.input,
+          };
+
+          if (lastMessage?.role === Role.Assistant) {
+            return messages.slice(0, -1).concat({
+              ...lastMessage,
+              content: lastMessage.content.concat(chunk),
+            });
+          } else {
+            return messages.concat({
+              role: Role.Assistant,
+              content: [chunk],
+            });
+          }
+        },
+        ToolResultEvent: (event) => {
+          const lastMessage = messages.at(-1);
+
+          const chunk = {
+            type: "tool_result" as const,
+            tool_use_id: event.id,
+            content: JSON.stringify(event.output),
+          };
+
+          if (lastMessage?.role === Role.User) {
+            return messages.slice(0, -1).concat({
+              ...lastMessage,
+              content: lastMessage.content.concat(chunk),
+            });
+          } else {
+            return messages.concat({
+              role: Role.User,
+              content: [chunk],
+            });
+          }
+        },
+      }),
+      Match.orElse(() => messages),
+    )(event),
 );
 
 const gatherTools = (
