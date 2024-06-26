@@ -9,6 +9,7 @@ import {
   Context,
   Data,
   Effect,
+  Match,
   Option,
   Stream,
   type Scope,
@@ -32,16 +33,16 @@ export interface StreamParams {
     | undefined;
 }
 
-export type FunctionResult<RS, RE> = Data.TaggedEnum<{
-  FunctionResultSuccess: { readonly id: string; readonly result: RS };
-  FunctionResultError: { readonly id: string; readonly result: RE };
+export type FunctionReturn<RS, RE> = Data.TaggedEnum<{
+  Success: { readonly result: RS };
+  Error: { readonly result: RE };
 }>;
 
-interface FunctionResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
-  readonly taggedEnum: FunctionResult<this["A"], this["B"]>;
+interface FunctionReturnDefinition extends Data.TaggedEnum.WithGenerics<2> {
+  readonly taggedEnum: FunctionReturn<this["A"], this["B"]>;
 }
 
-export const FunctionResult = Data.taggedEnum<FunctionResultDefinition>();
+export const FunctionReturn = Data.taggedEnum<FunctionReturnDefinition>();
 
 export interface FunctionDefinition<
   Name extends string,
@@ -56,7 +57,7 @@ export interface FunctionDefinition<
   readonly input: Schema.Schema<SA, SI, SR>;
   readonly function: (
     input: SA,
-  ) => Effect.Effect<FunctionResult<unknown, unknown>, E, R>;
+  ) => Effect.Effect<FunctionReturn<unknown, unknown>, E, R>;
 }
 
 export function defineFunction<
@@ -98,6 +99,17 @@ export class Generation extends Context.Tag("Generation")<
   Generation,
   Provider
 >() {}
+
+export type FunctionResult<RS, RE> = Data.TaggedEnum<{
+  FunctionResultSuccess: { readonly id: string; readonly result: RS };
+  FunctionResultError: { readonly id: string; readonly result: RE };
+}>;
+
+interface FunctionResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
+  readonly taggedEnum: FunctionResult<this["A"], this["B"]>;
+}
+
+export const FunctionResult = Data.taggedEnum<FunctionResultDefinition>();
 
 export function streamTools(
   params: StreamParams,
@@ -157,7 +169,25 @@ export function streamTools(
 
                 const output = yield* fnDefn.function(input);
 
-                yield* single(output);
+                yield* Match.type<FunctionReturn<unknown, unknown>>().pipe(
+                  Match.tags({
+                    Success: () =>
+                      single(
+                        FunctionResult.FunctionResultSuccess({
+                          id: fnCall.id,
+                          result: output.result,
+                        }),
+                      ),
+                    Error: () =>
+                      single(
+                        FunctionResult.FunctionResultError({
+                          id: fnCall.id,
+                          result: output.result,
+                        }),
+                      ),
+                  }),
+                  Match.exhaustive,
+                )(output);
 
                 const toolResultEvent = new ToolResultSuccessEvent({
                   id: fnCall.id,
