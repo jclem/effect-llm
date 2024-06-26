@@ -16,7 +16,7 @@ import {
 import type { NonEmptyArray } from "effect/Array";
 import type { UnknownException } from "effect/Cause";
 import {
-  ToolResultEvent,
+  ToolResultSuccessEvent,
   ToolUseEvent,
   type AssistantMessage,
   type ThreadEvent,
@@ -29,24 +29,44 @@ export interface StreamParams {
   readonly maxTokens?: number | undefined;
   readonly functions?:
     | Readonly<
-        NonEmptyArray<FunctionDefinition<any, any, any, any, any, any, any>>
+        NonEmptyArray<
+          FunctionDefinition<any, any, any, any, any, any, any, any>
+        >
       >
     | undefined;
 }
 
-export interface FunctionDefinition<Name extends string, SA, SI, SR, A, E, R> {
+export type FunctionResult<RS, RE> = Data.TaggedEnum<{
+  Success: { readonly result: RS };
+  Error: { readonly result: RE };
+}>;
+
+interface FunctionResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
+  readonly taggedEnum: FunctionResult<this["A"], this["B"]>;
+}
+
+export const FunctionResult = Data.taggedEnum<FunctionResultDefinition>();
+
+export interface FunctionDefinition<
+  Name extends string,
+  SA,
+  SI,
+  SR,
+  AS,
+  AE,
+  E,
+  R,
+> {
   readonly name: Name;
   readonly description?: string | undefined;
   readonly input: Schema.Schema<SA, SI, SR>;
-  readonly function: (
-    input: SA,
-  ) => Effect.Effect<{ ok: boolean; result: A }, E, R>;
+  readonly function: (input: SA) => Effect.Effect<FunctionResult<AS, AE>, E, R>;
 }
 
-export function defineFunction<Name extends string, SA, SI, SR, A, E, R>(
+export function defineFunction<Name extends string, SA, SI, SR, AS, AE, E, R>(
   name: Name,
-  definition: Omit<FunctionDefinition<Name, SA, SI, SR, A, E, R>, "name">,
-): FunctionDefinition<Name, SA, SI, SR, A, E, R> {
+  definition: Omit<FunctionDefinition<Name, SA, SI, SR, AS, AE, E, R>, "name">,
+): FunctionDefinition<Name, SA, SI, SR, AS, AE, E, R> {
   return { ...definition, name };
 }
 
@@ -76,28 +96,21 @@ export class Generation extends Context.Tag("Generation")<
   Provider
 >() {}
 
-export type FunctionResult = {
-  readonly _tag: "FunctionResult";
-  readonly id: string;
-  readonly ok: boolean;
-  readonly result: unknown;
-};
-
 export function streamTools(
   params: StreamParams,
 ): Stream.Stream<
-  StreamEvent | FunctionResult,
+  StreamEvent | FunctionResult<unknown, unknown>,
   HttpClientError | HttpBodyError | UnknownException,
   Scope.Scope
 > {
   const fnCalls: Extract<StreamEvent, { _tag: "FunctionCall" }>[] = [];
 
   return Stream.asyncEffect<
-    StreamEvent | FunctionResult,
+    StreamEvent | FunctionResult<unknown, unknown>,
     HttpClientError | HttpBodyError | UnknownException,
     Scope.Scope
   >((emit) => {
-    const single = (event: StreamEvent | FunctionResult) =>
+    const single = (event: StreamEvent | FunctionResult<unknown, unknown>) =>
       Effect.promise(() => emit.single(event));
     const end = () => Effect.promise(() => emit.end());
     const fail = (error: HttpClientError | HttpBodyError | UnknownException) =>
@@ -141,16 +154,10 @@ export function streamTools(
 
                 const output = yield* fnDefn.function(input);
 
-                yield* single({
-                  _tag: "FunctionResult",
-                  id: fnCall.id,
-                  ok: output.ok,
-                  result: output.result,
-                });
+                yield* single(output);
 
-                const toolResultEvent = new ToolResultEvent({
+                const toolResultEvent = new ToolResultSuccessEvent({
                   id: fnCall.id,
-                  ok: output.ok,
                   result: output.result,
                 });
 

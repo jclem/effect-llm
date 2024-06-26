@@ -162,6 +162,7 @@ const gatherTools = (
         unknown,
         unknown,
         unknown,
+        unknown,
         unknown
       >
     >
@@ -208,7 +209,13 @@ const messagesFromEvents = Array.filterMap(
             },
           ],
         }),
-      ToolResultEvent: (event) =>
+      ToolResultSuccessEvent: (event) =>
+        Option.some({
+          role: "tool",
+          tool_call_id: event.id,
+          content: JSON.stringify(event.result),
+        }),
+      ToolResultErrorEvent: (event) =>
         Option.some({
           role: "tool",
           tool_call_id: event.id,

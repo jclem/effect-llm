@@ -333,13 +333,35 @@ const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
             });
           }
         },
-        ToolResultEvent: (event) => {
+        ToolResultSuccessEvent: (event) => {
           const lastMessage = messages.at(-1);
 
           const chunk = {
             type: "tool_result" as const,
             tool_use_id: event.id,
-            is_error: !event.ok,
+            is_error: false,
+            content: JSON.stringify(event.result),
+          };
+
+          if (lastMessage?.role === Role.User) {
+            return messages.slice(0, -1).concat({
+              ...lastMessage,
+              content: lastMessage.content.concat(chunk),
+            });
+          } else {
+            return messages.concat({
+              role: Role.User,
+              content: [chunk],
+            });
+          }
+        },
+        ToolResultErrorEvent: (event) => {
+          const lastMessage = messages.at(-1);
+
+          const chunk = {
+            type: "tool_result" as const,
+            tool_use_id: event.id,
+            is_error: true,
             content: JSON.stringify(event.result),
           };
 
@@ -365,6 +387,7 @@ const gatherTools = (
     NonEmptyArray<
       FunctionDefinition<
         string,
+        unknown,
         unknown,
         unknown,
         unknown,
