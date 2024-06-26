@@ -212,7 +212,7 @@ const messagesFromEvents = Array.filterMap(
         Option.some({
           role: "tool",
           tool_call_id: event.id,
-          content: JSON.stringify(event.output),
+          content: JSON.stringify(event.result),
         }),
     }),
     Match.exhaustive,

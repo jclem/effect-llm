@@ -250,15 +250,20 @@ export const make = (
 type AnthropicUserMessage = {
   role: Role.User;
   content: (
-    | { type: "text"; content: string }
-    | { type: "tool_result"; tool_use_id: string; content: string }
+    | { type: "text"; text: string }
+    | {
+        type: "tool_result";
+        tool_use_id: string;
+        is_error: boolean;
+        content: string;
+      }
   )[];
 };
 
 type AnthropicAssistantMessage = {
   role: Role.Assistant;
   content: (
-    | { type: "text"; content: string }
+    | { type: "text"; text: string }
     | { type: "tool_use"; id: string; name: string; input: unknown }
   )[];
 };
@@ -278,13 +283,13 @@ const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
               ...lastMessage,
               content: lastMessage.content.concat({
                 type: "text",
-                content: message.content,
+                text: message.content,
               }),
             });
           } else {
             return messages.concat({
               role: Role.User,
-              content: [{ type: "text", content: message.content }],
+              content: [{ type: "text", text: message.content }],
             });
           }
         },
@@ -296,13 +301,13 @@ const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
               ...lastMessage,
               content: lastMessage.content.concat({
                 type: "text",
-                content: message.content,
+                text: message.content,
               }),
             });
           } else {
             return messages.concat({
               role: Role.Assistant,
-              content: [{ type: "text", content: message.content }],
+              content: [{ type: "text", text: message.content }],
             });
           }
         },
@@ -334,7 +339,8 @@ const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
           const chunk = {
             type: "tool_result" as const,
             tool_use_id: event.id,
-            content: JSON.stringify(event.output),
+            is_error: !event.ok,
+            content: JSON.stringify(event.result),
           };
 
           if (lastMessage?.role === Role.User) {

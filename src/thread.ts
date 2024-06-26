@@ -54,11 +54,12 @@ export class ToolUseEvent<Name extends string, Input> extends Data.TaggedClass(
 /**
  * The result of a tool invocation
  */
-export class ToolResultEvent<Output> extends Data.TaggedClass(
+export class ToolResultEvent<Result> extends Data.TaggedClass(
   "ToolResultEvent",
 )<{
   readonly id: string;
-  readonly output: Output;
+  readonly ok: boolean;
+  readonly result: Result;
 }> {}
 
 /**

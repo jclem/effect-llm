@@ -38,7 +38,9 @@ export interface FunctionDefinition<Name extends string, SA, SI, SR, A, E, R> {
   readonly name: Name;
   readonly description?: string | undefined;
   readonly input: Schema.Schema<SA, SI, SR>;
-  readonly function: (input: SA) => Effect.Effect<A, E, R>;
+  readonly function: (
+    input: SA,
+  ) => Effect.Effect<{ ok: boolean; result: A }, E, R>;
 }
 
 export function defineFunction<Name extends string, SA, SI, SR, A, E, R>(
@@ -77,6 +79,7 @@ export class Generation extends Context.Tag("Generation")<
 export type FunctionResult = {
   readonly _tag: "FunctionResult";
   readonly id: string;
+  readonly ok: boolean;
   readonly result: unknown;
 };
 
@@ -141,12 +144,14 @@ export function streamTools(
                 yield* single({
                   _tag: "FunctionResult",
                   id: fnCall.id,
-                  result: output,
+                  ok: output.ok,
+                  result: output.result,
                 });
 
                 const toolResultEvent = new ToolResultEvent({
                   id: fnCall.id,
-                  output,
+                  ok: output.ok,
+                  result: output.result,
                 });
 
                 newEvents.push(toolCallEvent, toolResultEvent);
