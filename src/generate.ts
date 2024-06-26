@@ -50,12 +50,12 @@ export const FunctionResult = Data.taggedEnum<FunctionResultDefinition>();
 export interface FunctionDefinition<
   Name extends string,
   SA,
-  SI,
-  SR,
   AS,
   AE,
-  E,
-  R,
+  E = never,
+  R = never,
+  SI = SA,
+  SR = SI,
 > {
   readonly name: Name;
   readonly description?: string | undefined;
@@ -63,10 +63,19 @@ export interface FunctionDefinition<
   readonly function: (input: SA) => Effect.Effect<FunctionResult<AS, AE>, E, R>;
 }
 
-export function defineFunction<Name extends string, SA, SI, SR, AS, AE, E, R>(
+export function defineFunction<
+  Name extends string,
+  SA,
+  AS,
+  AE,
+  E = never,
+  R = never,
+  SI = SA,
+  SR = SI,
+>(
   name: Name,
-  definition: Omit<FunctionDefinition<Name, SA, SI, SR, AS, AE, E, R>, "name">,
-): FunctionDefinition<Name, SA, SI, SR, AS, AE, E, R> {
+  definition: Omit<FunctionDefinition<Name, SA, AS, AE, E, R, SI, SR>, "name">,
+): FunctionDefinition<Name, SA, AS, AE, E, R, SI, SR> {
   return { ...definition, name };
 }
 
