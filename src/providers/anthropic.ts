@@ -385,16 +385,7 @@ const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
 const gatherTools = (
   tools: Readonly<
     NonEmptyArray<
-      FunctionDefinition<
-        string,
-        unknown,
-        unknown,
-        unknown,
-        unknown,
-        unknown,
-        unknown,
-        unknown
-      >
+      FunctionDefinition<string, unknown, unknown, unknown, unknown, unknown>
     >
   >,
 ) =>

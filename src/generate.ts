@@ -28,11 +28,7 @@ export interface StreamParams {
   readonly events: readonly ThreadEvent[];
   readonly maxTokens?: number | undefined;
   readonly functions?:
-    | Readonly<
-        NonEmptyArray<
-          FunctionDefinition<any, any, any, any, any, any, any, any>
-        >
-      >
+    | Readonly<NonEmptyArray<FunctionDefinition<any, any, any, any, any, any>>>
     | undefined;
 }
 
@@ -50,8 +46,6 @@ export const FunctionResult = Data.taggedEnum<FunctionResultDefinition>();
 export interface FunctionDefinition<
   Name extends string,
   SA,
-  AS,
-  AE,
   E = never,
   R = never,
   SI = SA,
@@ -60,22 +54,22 @@ export interface FunctionDefinition<
   readonly name: Name;
   readonly description?: string | undefined;
   readonly input: Schema.Schema<SA, SI, SR>;
-  readonly function: (input: SA) => Effect.Effect<FunctionResult<AS, AE>, E, R>;
+  readonly function: (
+    input: SA,
+  ) => Effect.Effect<FunctionResult<unknown, unknown>, E, R>;
 }
 
 export function defineFunction<
   Name extends string,
   SA,
-  AS,
-  AE,
   E = never,
   R = never,
   SI = SA,
   SR = SI,
 >(
   name: Name,
-  definition: Omit<FunctionDefinition<Name, SA, AS, AE, E, R, SI, SR>, "name">,
-): FunctionDefinition<Name, SA, AS, AE, E, R, SI, SR> {
+  definition: Omit<FunctionDefinition<Name, SA, E, R, SI, SR>, "name">,
+): FunctionDefinition<Name, SA, E, R, SI, SR> {
   return { ...definition, name };
 }
 
