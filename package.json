@@ -1,6 +1,6 @@
 {
   "name": "@jclem/effect-llm",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "An Effect wrapper around some LLM APIs",
   "license": "MIT",
   "author": "Jonathan Clem <j@jclem.me> (https://jclem.me)",
@@ -26,19 +26,19 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/index.mjs"
+      "default": "./dist/index.js"
     },
     "./generate": {
       "types": "./dist/generate.d.ts",
-      "default": "./dist/generate.mjs"
+      "default": "./dist/generate.js"
     },
     "./thread": {
       "types": "./dist/thread.d.ts",
-      "default": "./dist/thread.mjs"
+      "default": "./dist/thread.js"
     },
     "./providers": {
       "types": "./dist/providers/index.d.ts",
-      "default": "./dist/providers/index.mjs"
+      "default": "./dist/providers/index.js"
     }
   },
   "dependencies": {
