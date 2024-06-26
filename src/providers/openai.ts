@@ -136,11 +136,9 @@ export const make = (
                 for (const tool of partialToolCalls.values()) {
                   events.push(
                     StreamEvent.FunctionCall({
-                      functionCall: {
-                        id: tool.id,
-                        name: tool.name,
-                        arguments: tool.arguments,
-                      },
+                      id: tool.id,
+                      name: tool.name,
+                      arguments: tool.arguments,
                     }),
                   );
                 }

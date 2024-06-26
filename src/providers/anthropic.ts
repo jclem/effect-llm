@@ -229,11 +229,9 @@ export const make = (
                       case "toolUse": {
                         return [
                           StreamEvent.FunctionCall({
-                            functionCall: {
-                              id: block.toolUse.id,
-                              name: block.toolUse.name,
-                              arguments: block.toolUse.input,
-                            },
+                            id: block.toolUse.id,
+                            name: block.toolUse.name,
+                            arguments: block.toolUse.input,
                           }),
                         ];
                       }

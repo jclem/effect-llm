@@ -52,11 +52,9 @@ export type StreamEvent = Data.TaggedEnum<{
   Content: { readonly content: string };
   Message: { readonly message: AssistantMessage };
   FunctionCall: {
-    readonly functionCall: {
-      readonly id: string;
-      readonly name: string;
-      readonly arguments: string;
-    };
+    readonly id: string;
+    readonly name: string;
+    readonly arguments: string;
   };
 }>;
 export const StreamEvent = Data.taggedEnum<StreamEvent>();
@@ -76,24 +74,27 @@ export class Generation extends Context.Tag("Generation")<
   Provider
 >() {}
 
+type FunctionResult = {
+  readonly _tag: "FunctionResult";
+  readonly id: string;
+  readonly result: unknown;
+};
+
 export function streamTools(
   params: StreamParams,
 ): Stream.Stream<
-  StreamEvent,
+  StreamEvent | FunctionResult,
   HttpClientError | HttpBodyError | UnknownException,
   Scope.Scope
 > {
-  const fnCalls: Extract<
-    StreamEvent,
-    { _tag: "FunctionCall" }
-  >["functionCall"][] = [];
+  const fnCalls: Extract<StreamEvent, { _tag: "FunctionCall" }>[] = [];
 
   return Stream.asyncEffect<
-    StreamEvent,
+    StreamEvent | FunctionResult,
     HttpClientError | HttpBodyError | UnknownException,
     Scope.Scope
   >((emit) => {
-    const single = (event: StreamEvent) =>
+    const single = (event: StreamEvent | FunctionResult) =>
       Effect.promise(() => emit.single(event));
     const end = () => Effect.promise(() => emit.end());
     const fail = (error: HttpClientError | HttpBodyError | UnknownException) =>
@@ -104,10 +105,10 @@ export function streamTools(
         gen.stream(params).pipe(
           Stream.runForEach((event) => {
             if (event._tag === "FunctionCall") {
-              fnCalls.push(event.functionCall);
+              fnCalls.push(event);
             }
 
-            return Effect.promise(() => emit.single(event));
+            return single(event);
           }),
           Effect.andThen(() =>
             Effect.gen(function* () {
@@ -136,6 +137,12 @@ export function streamTools(
                 });
 
                 const output = yield* fnDefn.function(input);
+
+                yield* single({
+                  _tag: "FunctionResult",
+                  id: fnCall.id,
+                  result: output,
+                });
 
                 const toolResultEvent = new ToolResultEvent({
                   id: fnCall.id,
