@@ -33,8 +33,8 @@ export interface StreamParams {
 }
 
 export type FunctionResult<RS, RE> = Data.TaggedEnum<{
-  Success: { readonly result: RS };
-  Error: { readonly result: RE };
+  FunctionResultSuccess: { readonly id: string; readonly result: RS };
+  FunctionResultError: { readonly id: string; readonly result: RE };
 }>;
 
 interface FunctionResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
