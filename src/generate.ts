@@ -74,7 +74,7 @@ export class Generation extends Context.Tag("Generation")<
   Provider
 >() {}
 
-type FunctionResult = {
+export type FunctionResult = {
   readonly _tag: "FunctionResult";
   readonly id: string;
   readonly result: unknown;
