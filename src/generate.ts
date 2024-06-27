@@ -157,7 +157,7 @@ export function streamTools(
         fnDefn: FunctionDefinition<any, any, any, any, any, any, any>;
       }[] = [];
 
-      yield* gen.stream(params).pipe(
+      return yield* gen.stream(params).pipe(
         Stream.runForEach((event) =>
           Effect.gen(function* () {
             console.log("event", event);
