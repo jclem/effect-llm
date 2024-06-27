@@ -299,7 +299,10 @@ export function streamTools(
               )(output);
             }
 
+            console.log("after calls");
+
             if (newEvents.length === 0) {
+              console.log("no neew events");
               return;
             }
 
@@ -307,6 +310,8 @@ export function streamTools(
               ...params,
               events: [...params.events, ...newEvents],
             };
+
+            console.log("next recurse...");
 
             yield* streamTools(newParams).pipe(
               Stream.runForEach((e) => single(e)),
