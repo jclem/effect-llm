@@ -181,8 +181,6 @@ export function streamTools(
                 ),
               );
 
-              console.log("PUSH CALL", event);
-
               fnCalls.push({
                 id: event.id,
                 name: event.name,
@@ -221,14 +219,20 @@ export function streamTools(
               result: error.error.message,
             });
 
+            console.log("recurse streaming...");
+
             yield* streamTools({
               ...params,
               events: [...params.events, failedToolCall, failedToolResult],
             }).pipe(Stream.runForEach((e) => single(e)));
+
+            console.log("recurse done...");
           }),
         ),
         Effect.andThen(() =>
           Effect.gen(function* () {
+            console.log("next...");
+
             if (fnCalls.length === 0) {
               return yield* end();
             }
