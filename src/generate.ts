@@ -143,7 +143,10 @@ export function streamTools(
       const gen = yield* Generation;
 
       const single = (event: StreamEvent | FunctionResult<unknown, unknown>) =>
-        Effect.promise(() => emit.single(event));
+        Effect.promise(() => {
+          console.log("emit", event);
+          return emit.single(event);
+        });
       const end = () => Effect.promise(() => emit.end());
       const fail = (
         error: HttpClientError | HttpBodyError | UnknownException,
