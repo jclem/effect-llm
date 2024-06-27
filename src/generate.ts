@@ -181,6 +181,8 @@ export function streamTools(
                 ),
               );
 
+              console.log("PUSH CALL", event);
+
               fnCalls.push({
                 id: event.id,
                 name: event.name,
