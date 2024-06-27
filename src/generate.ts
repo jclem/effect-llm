@@ -142,15 +142,9 @@ export function streamTools(
     Effect.gen(function* () {
       const gen = yield* Generation;
 
-      console.log("start stream");
-
       const single = (event: StreamEvent | FunctionResult<unknown, unknown>) =>
         Effect.promise(() => emit.single(event));
-      const end = () =>
-        Effect.promise(() => {
-          console.log("end stream");
-          return emit.end();
-        });
+      const end = () => Effect.promise(() => emit.end());
       const fail = (
         error: HttpClientError | HttpBodyError | UnknownException,
       ) => Effect.promise(() => emit.fail(error));
@@ -166,6 +160,8 @@ export function streamTools(
       yield* gen.stream(params).pipe(
         Stream.runForEach((event) =>
           Effect.gen(function* () {
+            console.log("event", event);
+
             if (event._tag === "FunctionCall") {
               const fnDefn = Array.findFirst(
                 params.functions ?? [],
@@ -225,32 +221,21 @@ export function streamTools(
               result: error.error.message,
             });
 
-            console.log("recurse streaming...");
-
             yield* streamTools({
               ...params,
               events: [...params.events, failedToolCall, failedToolResult],
             }).pipe(Stream.runForEach((e) => single(e)));
-
-            console.log("recurse done...");
           }),
         ),
         Effect.andThen(() =>
           Effect.gen(function* () {
-            console.log("next...");
-
             if (fnCalls.length === 0) {
-              console.log("no calls...");
               return yield* end();
             }
-
-            console.log("a");
 
             const newEvents: ThreadEvent[] = [];
 
             for (const fnCall of fnCalls) {
-              console.log("b", fnCall.id);
-
               const toolCallEvent = new ToolUseEvent({
                 id: fnCall.id,
                 name: fnCall.name,
@@ -261,8 +246,6 @@ export function streamTools(
                 fnCall.id,
                 fnCall.input,
               );
-
-              console.log("c");
 
               newEvents.push(toolCallEvent);
 
@@ -303,13 +286,9 @@ export function streamTools(
                 }),
                 Match.exhaustive,
               )(output);
-              console.log("d");
             }
 
-            console.log("after calls");
-
             if (newEvents.length === 0) {
-              console.log("no neew events");
               return;
             }
 
@@ -317,8 +296,6 @@ export function streamTools(
               ...params,
               events: [...params.events, ...newEvents],
             };
-
-            console.log("next recurse...");
 
             yield* streamTools(newParams).pipe(
               Stream.runForEach((e) => single(e)),
