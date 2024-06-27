@@ -143,10 +143,7 @@ export function streamTools(
       const gen = yield* Generation;
 
       const single = (event: StreamEvent | FunctionResult<unknown, unknown>) =>
-        Effect.promise(() => {
-          console.log("emit", event);
-          return emit.single(event);
-        });
+        Effect.promise(() => emit.single(event));
       const end = () => Effect.promise(() => emit.end());
       const fail = (
         error: HttpClientError | HttpBodyError | UnknownException,
@@ -163,8 +160,6 @@ export function streamTools(
       return yield* gen.stream(params).pipe(
         Stream.runForEach((event) =>
           Effect.gen(function* () {
-            console.log("event", event);
-
             if (event._tag === "FunctionCall") {
               const fnDefn = Array.findFirst(
                 params.functions ?? [],
@@ -195,7 +190,7 @@ export function streamTools(
               });
             }
 
-            return single(event);
+            yield* single(event);
           }),
         ),
         Effect.catchTag("InvalidFunctionCallError", (error) =>
