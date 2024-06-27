@@ -56,7 +56,7 @@ export interface FunctionDefinition<
   readonly name: Name;
   readonly description?: string | undefined;
   readonly input: Schema.Schema<SA, SI, SR>;
-  readonly function: (input: SA) => Effect.Effect<A, E, R>;
+  readonly function: (id: string, input: SA) => Effect.Effect<A, E, R>;
 }
 
 export function defineFunction<
@@ -182,7 +182,7 @@ export function streamTools(
                   input,
                 });
 
-                const output = yield* fnDefn.function(input);
+                const output = yield* fnDefn.function(fnCall.id, input);
 
                 yield* Match.type<FunctionReturn<unknown, unknown>>().pipe(
                   Match.tags({
