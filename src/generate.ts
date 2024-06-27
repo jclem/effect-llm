@@ -47,30 +47,30 @@ export const FunctionReturn = Data.taggedEnum<FunctionReturnDefinition>();
 export interface FunctionDefinition<
   Name extends string,
   SA,
-  E = never,
-  R = never,
+  A extends FunctionReturn<any, any>,
+  E,
+  R,
   SI = SA,
   SR = SI,
 > {
   readonly name: Name;
   readonly description?: string | undefined;
   readonly input: Schema.Schema<SA, SI, SR>;
-  readonly function: (
-    input: SA,
-  ) => Effect.Effect<FunctionReturn<unknown, unknown>, E, R>;
+  readonly function: (input: SA) => Effect.Effect<A, E, R>;
 }
 
 export function defineFunction<
   Name extends string,
   SA,
-  E = never,
-  R = never,
+  A extends FunctionReturn<any, any>,
+  E,
+  R,
   SI = SA,
   SR = SI,
 >(
   name: Name,
-  definition: Omit<FunctionDefinition<Name, SA, E, R, SI, SR>, "name">,
-): FunctionDefinition<Name, SA, E, R, SI, SR> {
+  definition: Omit<FunctionDefinition<Name, SA, A, E, R, SI, SR>, "name">,
+): FunctionDefinition<Name, SA, A, E, R, SI, SR> {
   return { ...definition, name };
 }
 
