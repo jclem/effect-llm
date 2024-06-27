@@ -4,6 +4,7 @@ import type {
   ResponseError,
 } from "@effect/platform/HttpClientError";
 import { Schema } from "@effect/schema";
+import type { ParseError } from "@effect/schema/ParseResult";
 import {
   Array,
   Context,
@@ -17,6 +18,7 @@ import {
 import type { NonEmptyArray } from "effect/Array";
 import type { UnknownException } from "effect/Cause";
 import {
+  ToolResultErrorEvent,
   ToolResultSuccessEvent,
   ToolUseEvent,
   type AssistantMessage,
@@ -75,23 +77,15 @@ export function defineFunction<
 }
 
 export type StreamEvent = Data.TaggedEnum<{
-  ContentStart: {
-    readonly content: string;
-  };
-
-  Content: {
-    readonly content: string;
-  };
-
-  Message: {
-    readonly message: AssistantMessage;
-  };
-
-  FunctionCallStart: {
+  ContentStart: { readonly content: string };
+  Content: { readonly content: string };
+  Message: { readonly message: AssistantMessage };
+  InvalidFunctionCall: {
     readonly id: string;
     readonly name: string;
+    readonly arguments: string;
   };
-
+  FunctionCallStart: { readonly id: string; readonly name: string };
   FunctionCall: {
     readonly id: string;
     readonly name: string;
@@ -126,6 +120,13 @@ interface FunctionResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
 
 export const FunctionResult = Data.taggedEnum<FunctionResultDefinition>();
 
+class InvalidFunctionCallError extends Data.TaggedError(
+  "InvalidFunctionCallError",
+)<{
+  readonly functionCall: Extract<StreamEvent, { _tag: "FunctionCall" }>;
+  readonly error: ParseError;
+}> {}
+
 export function streamTools(
   params: StreamParams,
 ): Stream.Stream<
@@ -133,104 +134,171 @@ export function streamTools(
   HttpClientError | HttpBodyError | UnknownException,
   Scope.Scope
 > {
-  const fnCalls: Extract<StreamEvent, { _tag: "FunctionCall" }>[] = [];
-
   return Stream.asyncEffect<
     StreamEvent | FunctionResult<unknown, unknown>,
     HttpClientError | HttpBodyError | UnknownException,
     Scope.Scope
-  >((emit) => {
-    const single = (event: StreamEvent | FunctionResult<unknown, unknown>) =>
-      Effect.promise(() => emit.single(event));
-    const end = () => Effect.promise(() => emit.end());
-    const fail = (error: HttpClientError | HttpBodyError | UnknownException) =>
-      Effect.promise(() => emit.fail(error));
+  >((emit) =>
+    Effect.gen(function* () {
+      const gen = yield* Generation;
 
-    return Generation.pipe(
-      Effect.flatMap((gen) =>
-        gen.stream(params).pipe(
-          Stream.runForEach((event) => {
+      const single = (event: StreamEvent | FunctionResult<unknown, unknown>) =>
+        Effect.promise(() => emit.single(event));
+      const end = () => Effect.promise(() => emit.end());
+      const fail = (
+        error: HttpClientError | HttpBodyError | UnknownException,
+      ) => Effect.promise(() => emit.fail(error));
+
+      const fnCalls: {
+        id: string;
+        name: string;
+        args: string;
+        input: unknown;
+        fnDefn: FunctionDefinition<any, any, any, any, any, any, any>;
+      }[] = [];
+
+      yield* gen.stream(params).pipe(
+        Stream.runForEach((event) =>
+          Effect.gen(function* () {
             if (event._tag === "FunctionCall") {
-              fnCalls.push(event);
+              const fnDefn = Array.findFirst(
+                params.functions ?? [],
+                (f) => f.name === event.name,
+              ).pipe(
+                Option.getOrThrowWith(() => new Error("No function found")),
+              );
+
+              const input = yield* Schema.decodeUnknown(
+                Schema.parseJson(fnDefn.input),
+              )(event.arguments).pipe(
+                Effect.catchTag("ParseError", (err) =>
+                  Effect.fail(
+                    new InvalidFunctionCallError({
+                      functionCall: event,
+                      error: err,
+                    }),
+                  ),
+                ),
+              );
+
+              fnCalls.push({
+                id: event.id,
+                name: event.name,
+                args: event.arguments,
+                input,
+                fnDefn,
+              });
             }
 
             return single(event);
           }),
-          Effect.andThen(() =>
-            Effect.gen(function* () {
-              if (fnCalls.length === 0) {
-                return yield* end();
-              }
+        ),
+        Effect.catchTag("InvalidFunctionCallError", (error) =>
+          Effect.gen(function* () {
+            yield* single(
+              StreamEvent.InvalidFunctionCall({
+                id: error.functionCall.id,
+                name: error.functionCall.name,
+                arguments: error.functionCall.arguments,
+              }),
+            );
 
-              const newEvents: ThreadEvent[] = [];
+            const failedToolCall = new ToolUseEvent({
+              id: error.functionCall.id,
+              name: error.functionCall.name,
+              input: error.functionCall.arguments,
+            });
 
-              for (const fnCall of fnCalls) {
-                const fnDefn = Array.findFirst(
-                  params.functions ?? [],
-                  (f) => f.name === fnCall.name,
-                ).pipe(
-                  Option.getOrThrowWith(() => new Error("No function found")),
-                );
+            const failedToolResult = new ToolResultErrorEvent({
+              id: error.functionCall.id,
+              result: error.error.message,
+            });
 
-                const input = yield* Schema.decodeUnknown(
-                  Schema.parseJson(fnDefn.input),
-                )(fnCall.arguments);
+            yield* streamTools({
+              ...params,
+              events: [...params.events, failedToolCall, failedToolResult],
+            }).pipe(Stream.runForEach((e) => single(e)));
+          }),
+        ),
+        Effect.andThen(() =>
+          Effect.gen(function* () {
+            if (fnCalls.length === 0) {
+              return yield* end();
+            }
 
-                const toolCallEvent = new ToolUseEvent({
-                  id: fnCall.id,
-                  name: fnCall.name,
-                  input,
-                });
+            const newEvents: ThreadEvent[] = [];
 
-                const output = yield* fnDefn.function(fnCall.id, input);
+            for (const fnCall of fnCalls) {
+              const toolCallEvent = new ToolUseEvent({
+                id: fnCall.id,
+                name: fnCall.name,
+                input: fnCall.input,
+              });
 
-                yield* Match.type<FunctionReturn<unknown, unknown>>().pipe(
-                  Match.tags({
-                    Success: () =>
-                      single(
+              const output = yield* fnCall.fnDefn.function(
+                fnCall.id,
+                fnCall.input,
+              );
+
+              newEvents.push(toolCallEvent);
+
+              yield* Match.type<FunctionReturn<unknown, unknown>>().pipe(
+                Match.tags({
+                  Success: () =>
+                    Effect.gen(function* () {
+                      yield* single(
                         FunctionResult.FunctionResultSuccess({
                           id: fnCall.id,
                           result: output.result,
                         }),
-                      ),
-                    Error: () =>
-                      single(
+                      );
+
+                      newEvents.push(
+                        new ToolResultSuccessEvent({
+                          id: fnCall.id,
+                          result: output.result,
+                        }),
+                      );
+                    }),
+                  Error: () =>
+                    Effect.gen(function* () {
+                      yield* single(
                         FunctionResult.FunctionResultError({
                           id: fnCall.id,
                           result: output.result,
                         }),
-                      ),
-                  }),
-                  Match.exhaustive,
-                )(output);
+                      );
 
-                const toolResultEvent = new ToolResultSuccessEvent({
-                  id: fnCall.id,
-                  result: output.result,
-                });
+                      newEvents.push(
+                        new ToolResultErrorEvent({
+                          id: fnCall.id,
+                          result: output.result,
+                        }),
+                      );
+                    }),
+                }),
+                Match.exhaustive,
+              )(output);
+            }
 
-                newEvents.push(toolCallEvent, toolResultEvent);
-              }
+            if (newEvents.length === 0) {
+              return;
+            }
 
-              if (newEvents.length === 0) {
-                return;
-              }
+            const newParams: StreamParams = {
+              ...params,
+              events: [...params.events, ...newEvents],
+            };
 
-              const newParams: StreamParams = {
-                ...params,
-                events: [...params.events, ...newEvents],
-              };
-
-              yield* streamTools(newParams).pipe(
-                Stream.runForEach((e) => single(e)),
-              );
-            }),
-          ),
-          Effect.catchAll((err) => fail(err)),
-          Effect.andThen(() => end()),
-          Effect.fork,
+            yield* streamTools(newParams).pipe(
+              Stream.runForEach((e) => single(e)),
+            );
+          }),
         ),
-      ),
-    );
-  });
+        Effect.catchAll((err) => fail(err)),
+        Effect.andThen(() => end()),
+        Effect.fork,
+      );
+    }),
+  );
 }
