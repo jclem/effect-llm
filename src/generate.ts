@@ -75,8 +75,23 @@ export function defineFunction<
 }
 
 export type StreamEvent = Data.TaggedEnum<{
-  Content: { readonly content: string };
-  Message: { readonly message: AssistantMessage };
+  ContentStart: {
+    readonly content: string;
+  };
+
+  Content: {
+    readonly content: string;
+  };
+
+  Message: {
+    readonly message: AssistantMessage;
+  };
+
+  FunctionCallStart: {
+    readonly id: string;
+    readonly name: string;
+  };
+
   FunctionCall: {
     readonly id: string;
     readonly name: string;

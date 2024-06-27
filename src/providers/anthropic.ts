@@ -160,8 +160,8 @@ export const make = (
                           index: event.index,
                           text: "",
                         });
-                        return [];
-                      default:
+                        return [StreamEvent.ContentStart({ content: "" })];
+                      case "tool_use":
                         blocks.push({
                           type: "toolUse",
                           index: event.index,
@@ -171,7 +171,12 @@ export const make = (
                             input: "",
                           },
                         });
-                        return [];
+                        return [
+                          StreamEvent.FunctionCallStart({
+                            id: event.content_block.id,
+                            name: event.content_block.name,
+                          }),
+                        ];
                     }
                   },
                   content_block_delta: (event) => {

@@ -95,6 +95,7 @@ export const make = (
               { id: string; name: string; arguments: string }
             >();
 
+            // TODO: Implement ContentStart, FunctionCallStart, etc.
             return Stream.mapConcat(stream, (event) => {
               const choice = event.choices[0];
               const content = choice.delta.content;
