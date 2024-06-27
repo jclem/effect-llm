@@ -244,9 +244,13 @@ export function streamTools(
               return yield* end();
             }
 
+            console.log("a");
+
             const newEvents: ThreadEvent[] = [];
 
             for (const fnCall of fnCalls) {
+              console.log("b", fnCall.id);
+
               const toolCallEvent = new ToolUseEvent({
                 id: fnCall.id,
                 name: fnCall.name,
@@ -257,6 +261,8 @@ export function streamTools(
                 fnCall.id,
                 fnCall.input,
               );
+
+              console.log("c");
 
               newEvents.push(toolCallEvent);
 
@@ -297,6 +303,7 @@ export function streamTools(
                 }),
                 Match.exhaustive,
               )(output);
+              console.log("d");
             }
 
             console.log("after calls");
