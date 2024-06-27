@@ -142,9 +142,15 @@ export function streamTools(
     Effect.gen(function* () {
       const gen = yield* Generation;
 
+      console.log("start stream");
+
       const single = (event: StreamEvent | FunctionResult<unknown, unknown>) =>
         Effect.promise(() => emit.single(event));
-      const end = () => Effect.promise(() => emit.end());
+      const end = () =>
+        Effect.promise(() => {
+          console.log("end stream");
+          return emit.end();
+        });
       const fail = (
         error: HttpClientError | HttpBodyError | UnknownException,
       ) => Effect.promise(() => emit.fail(error));
@@ -234,6 +240,7 @@ export function streamTools(
             console.log("next...");
 
             if (fnCalls.length === 0) {
+              console.log("no calls...");
               return yield* end();
             }
 
