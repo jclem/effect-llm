@@ -203,10 +203,15 @@ export function streamTools(
               }),
             );
 
+            // NOTE: This could result in a parse error, but only if the model returns invalid JSON.
+            const input = Schema.decodeUnknown(Schema.parseJson())(
+              error.functionCall.arguments,
+            );
+
             const failedToolCall = new ToolUseEvent({
               id: error.functionCall.id,
               name: error.functionCall.name,
-              input: error.functionCall.arguments,
+              input,
             });
 
             const failedToolResult = new ToolResultErrorEvent({
