@@ -22,10 +22,6 @@ import {
 import { filterParsedEvents, streamSSE } from "../sse";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread";
 
-export interface AnthropicConfig {
-  apiKey: Redacted.Redacted<string>;
-}
-
 export enum Model {
   Claude3Opus = "claude-3-opus-20240229",
   Claude3Sonnet = "claude-3-sonnet-20240229",
@@ -90,9 +86,11 @@ const ContentBlockEvent = S.Union(
 type ContentBlockEvent = typeof ContentBlockEvent.Type;
 const decodeContentBlockEvent = S.decodeUnknownOption(ContentBlockEvent);
 
-export const make = (
-  config: AnthropicConfig,
-): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
+export const make = (): Effect.Effect<
+  Provider,
+  never,
+  HttpClient.HttpClient.Default
+> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
       Effect.map(HttpClient.filterStatusOk),
@@ -104,7 +102,6 @@ export const make = (
       Effect.map(
         HttpClient.mapRequest(
           HttpClientRequest.setHeaders({
-            "X-API-Key": Redacted.value(config.apiKey),
             "Anthropic-Version": "2023-06-01",
             "Content-Type": "application/json",
           }),
@@ -115,6 +112,10 @@ export const make = (
     return {
       stream(params: StreamParams) {
         return HttpClientRequest.post("/v1/messages").pipe(
+          HttpClientRequest.setHeader(
+            "X-API-Key",
+            Redacted.value(params.apiKey),
+          ),
           HttpClientRequest.jsonBody({
             // TODO: Handle system messages
             model: params.model,

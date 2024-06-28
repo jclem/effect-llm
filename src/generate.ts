@@ -12,6 +12,7 @@ import {
   Effect,
   Match,
   Option,
+  Redacted,
   Stream,
   type Scope,
 } from "effect";
@@ -26,6 +27,7 @@ import {
 } from "./thread";
 
 export interface StreamParams {
+  readonly apiKey: Redacted.Redacted<string>;
   readonly model: string;
   readonly system?: string | undefined;
   readonly events: readonly ThreadEvent[];

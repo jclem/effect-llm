@@ -11,10 +11,6 @@ import {
 import { filterParsedEvents, streamSSE } from "../sse";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread";
 
-export interface OpenAIConfig {
-  apiKey: Redacted.Redacted<string>;
-}
-
 export enum Model {
   GPT4Turbo = "gpt-4-turbo",
   GPT4o = "gpt-4o",
@@ -52,9 +48,11 @@ type ChatCompletionChunk = typeof ChatCompletionChunk.Type;
 
 const decodeChatCompletionChunk = S.decodeUnknownOption(ChatCompletionChunk);
 
-export const make = (
-  config: OpenAIConfig,
-): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
+export const make = (): Effect.Effect<
+  Provider,
+  never,
+  HttpClient.HttpClient.Default
+> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
       Effect.map(HttpClient.filterStatusOk),
@@ -66,7 +64,6 @@ export const make = (
       Effect.map(
         HttpClient.mapRequest(
           HttpClientRequest.setHeaders({
-            Authorization: `Bearer ${Redacted.value(config.apiKey)}`,
             "Content-Type": "application/json",
           }),
         ),
@@ -76,6 +73,10 @@ export const make = (
     return {
       stream(params: StreamParams) {
         return HttpClientRequest.post("/v1/chat/completions").pipe(
+          HttpClientRequest.setHeader(
+            "Authorization",
+            `Bearer ${Redacted.value(params.apiKey)}`,
+          ),
           HttpClientRequest.jsonBody({
             model: params.model,
             messages: messagesFromEvents(params.events),
