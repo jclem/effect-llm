@@ -21,15 +21,17 @@
   "type": "module",
   "scripts": {
     "build": "tsc --outDir dist",
-    "publish-package": "bun run build && npm publish",
+    "publish-package": "rm -rf ./dist && bun run build && npm publish",
     "check": "konk run c -cgL -n'check:*'",
     "check:prettier": "prettier --check .",
     "check:eslint": "eslint ."
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     }
   },
   "dependencies": {
