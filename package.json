@@ -21,7 +21,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc --outDir dist",
-    "publish-package": "bun run build && npm publish"
+    "publish-package": "bun run build && npm publish",
+    "check:prettier": "prettier --check ."
   },
   "exports": {
     ".": {
@@ -50,7 +51,8 @@
   },
   "devDependencies": {
     "@effect/platform-bun": "^0.41.4",
-    "@types/bun": "^1.1.6"
+    "@types/bun": "^1.1.6",
+    "prettier": "^3.3.3"
   },
   "peerDependencies": {
     "typescript": "^5.5.4"
