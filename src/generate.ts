@@ -25,7 +25,7 @@ import {
   ToolUseEvent,
   type AssistantMessage,
   type ThreadEvent,
-} from "./thread";
+} from "./thread.js";
 
 /** Parameters used to configure an LLM stream generation call. */
 export interface StreamParams<

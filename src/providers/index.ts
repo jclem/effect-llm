@@ -1,2 +1,2 @@
-export * as Anthropic from "./anthropic";
-export * as OpenAI from "./openai";
+export * as Anthropic from "./anthropic.js";
+export * as OpenAI from "./openai.js";

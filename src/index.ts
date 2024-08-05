@@ -1,3 +1,3 @@
-export * as Generate from "./generate";
-export * as Providers from "./providers";
-export * as Thread from "./thread";
+export * as Generate from "./generate.js";
+export * as Providers from "./providers/index.js";
+export * as Thread from "./thread.js";

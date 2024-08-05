@@ -12,10 +12,10 @@ import {
   type Scope,
 } from "effect";
 import type { UnknownException } from "effect/Cause";
-import type { FunctionDefinitionAny } from "../generate";
-import { StreamEvent, type Provider, type StreamParams } from "../generate";
-import { filterParsedEvents, streamSSE } from "../sse";
-import { AssistantMessage, Role, type ThreadEvent } from "../thread";
+import type { FunctionDefinitionAny } from "../generate.js";
+import { StreamEvent, type Provider, type StreamParams } from "../generate.js";
+import { filterParsedEvents, streamSSE } from "../sse.js";
+import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
 
 export enum Model {
   Claude3Opus = "claude-3-opus-20240229",

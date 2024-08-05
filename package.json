@@ -30,18 +30,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./generate": {
-      "types": "./dist/generate.d.ts",
-      "default": "./dist/generate.js"
-    },
-    "./thread": {
-      "types": "./dist/thread.d.ts",
-      "default": "./dist/thread.js"
-    },
-    "./providers": {
-      "types": "./dist/providers/index.d.ts",
-      "default": "./dist/providers/index.js"
     }
   },
   "dependencies": {
