@@ -4,8 +4,8 @@ import { Data, Effect, Exit, Match, Queue, Stream } from "effect";
 import { UnknownException } from "effect/Cause";
 import {
   createParser,
-  type ParseEvent,
   type ParsedEvent,
+  type ParseEvent,
 } from "eventsource-parser";
 
 type SSEQueueEvent = Data.TaggedEnum<{
@@ -44,22 +44,25 @@ export const streamSSE = (response: HttpClientResponse.HttpClientResponse) =>
       }
 
       Match.type<typeof exit.cause>().pipe(
-        Match.tag("Fail", (cause) => {
-          queue.unsafeOffer(SSEQueueEvent.Error(cause));
-        }),
-        Match.tag("Die", (die) => {
-          queue.unsafeOffer(
-            SSEQueueEvent.Error({ error: new UnknownException(die.defect) }),
-          );
+        Match.tags({
+          Fail: (cause) => {
+            queue.unsafeOffer(SSEQueueEvent.Error(cause));
+          },
+          Die: (die) => {
+            queue.unsafeOffer(
+              SSEQueueEvent.Error({ error: new UnknownException(die.defect) }),
+            );
+          },
         }),
         Match.orElse(() => Effect.void),
       )(exit.cause);
     });
 
     const mapQueueEvent = Match.type<SSEQueueEvent>().pipe(
-      Match.tag("Event", (event) => Effect.succeed(event.event)),
-      Match.tag("Error", (error) => Effect.fail(error.error)),
-      Match.exhaustive,
+      Match.tagsExhaustive({
+        Event: (event) => Effect.succeed(event.event),
+        Error: (error) => Effect.fail(error.error),
+      }),
     );
 
     return Stream.fromQueue(queue, { shutdown: true }).pipe(

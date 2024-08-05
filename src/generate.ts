@@ -1,23 +1,22 @@
 import type { HttpBodyError } from "@effect/platform/HttpBody";
-import type {
-  HttpClientError,
-  ResponseError,
-} from "@effect/platform/HttpClientError";
-import { Schema } from "@effect/schema";
+import type { HttpClientError } from "@effect/platform/HttpClientError";
+import { Schema as S } from "@effect/schema";
 import type { ParseError } from "@effect/schema/ParseResult";
+import type { Redacted } from "effect";
 import {
   Array,
   Context,
   Data,
   Effect,
+  Either,
   Match,
   Option,
-  Redacted,
+  pipe,
   Stream,
   type Scope,
 } from "effect";
-import type { NonEmptyArray } from "effect/Array";
-import type { UnknownException } from "effect/Cause";
+import { UnknownException } from "effect/Cause";
+import type { TaggedEnum } from "effect/Data";
 import {
   ToolResultErrorEvent,
   ToolResultSuccessEvent,
@@ -26,69 +25,115 @@ import {
   type ThreadEvent,
 } from "./thread";
 
-export interface StreamParams {
-  readonly apiKey: Redacted.Redacted<string>;
+/** Parameters used to configure an LLM stream generation call. */
+export interface StreamParams<
+  FnDefns extends Readonly<FunctionDefinitionAny[]>,
+> {
+  readonly apiKey: Redacted.Redacted;
   readonly model: string;
   readonly system?: string | undefined;
   readonly events: readonly ThreadEvent[];
+  readonly maxIterations?: number | undefined;
   readonly maxTokens?: number | undefined;
-  readonly functions?:
-    | Readonly<NonEmptyArray<FunctionDefinition<any, any, any, any, any, any>>>
-    | undefined;
+  readonly functions?: FnDefns | undefined;
 }
 
-export type FunctionReturn<RS, RE> = Data.TaggedEnum<{
-  Success: { readonly result: RS };
-  Error: { readonly result: RE };
-}>;
+/**
+ * An error reported back to the agent as an error during function execution.
+ *
+ * Any other error that occurs during function execution will be a runtime error
+ * and will halt the generation process.
+ */
+export class FunctionError<E> extends Data.TaggedError("FunctionError")<{
+  readonly payload: E;
+}> {}
 
-interface FunctionReturnDefinition extends Data.TaggedEnum.WithGenerics<2> {
-  readonly taggedEnum: FunctionReturn<this["A"], this["B"]>;
-}
+/**
+ * Wrap an error in a FunctionError and fail the effect with it.
+ *
+ * @param payload The error to wrap in a FunctionError
+ * @returns A new FunctionError
+ */
+export const functionError = <P>(payload: P) =>
+  Effect.fail(new FunctionError({ payload }));
 
-export const FunctionReturn = Data.taggedEnum<FunctionReturnDefinition>();
-
+/**
+ * A function definition that can be used in a stream generation call.
+ */
 export interface FunctionDefinition<
   Name extends string,
-  SA,
-  A extends FunctionReturn<any, any>,
+  A,
   E,
   R,
+  SA,
   SI = SA,
-  SR = SI,
+  SR = never,
 > {
   readonly name: Name;
   readonly description?: string | undefined;
-  readonly input: Schema.Schema<SA, SI, SR>;
+  readonly input: S.Schema<SA, SI, SR>;
   readonly function: (id: string, input: SA) => Effect.Effect<A, E, R>;
 }
 
+/**
+ * A utility type for an any-typed function definition.
+ */
+export type FunctionDefinitionAny = FunctionDefinition<
+  string,
+  any,
+  any,
+  any,
+  any,
+  any,
+  any
+>;
+
+type FunctionDefinitionError<F extends FunctionDefinitionAny> =
+  F extends FunctionDefinition<string, any, infer _E, any, any, any, any>
+    ? _E
+    : never;
+
+type FunctionDefinitionContext<F extends FunctionDefinitionAny> =
+  F extends FunctionDefinition<string, any, any, infer _C, any, any, infer _SC>
+    ? _C | _SC
+    : never;
+
+/**
+ * Define a function by providing its name, implementation, and other details.
+ *
+ * @param name The name of the function
+ * @param definition The function definition
+ * @returns A new function definition
+ */
 export function defineFunction<
   Name extends string,
-  SA,
-  A extends FunctionReturn<any, any>,
+  A,
   E,
   R,
+  SA,
   SI = SA,
-  SR = SI,
+  SR = never,
 >(
   name: Name,
-  definition: Omit<FunctionDefinition<Name, SA, A, E, R, SI, SR>, "name">,
-): FunctionDefinition<Name, SA, A, E, R, SI, SR> {
+  definition: Omit<FunctionDefinition<Name, A, E, R, SA, SI, SR>, "name">,
+): FunctionDefinition<Name, A, E, R, SA, SI, SR> {
   return { ...definition, name };
 }
 
+/**
+ * An event emitted during a stream generation call.
+ */
 export type StreamEvent = Data.TaggedEnum<{
   ContentStart: { readonly content: string };
   Content: { readonly content: string };
   Message: { readonly message: AssistantMessage };
-  InvalidFunctionCall: {
+  FunctionCallStart: { readonly id: string; readonly name: string };
+  FunctionCall: {
     readonly id: string;
     readonly name: string;
     readonly arguments: string;
   };
-  FunctionCallStart: { readonly id: string; readonly name: string };
-  FunctionCall: {
+  InvalidFunctionCall: {
     readonly id: string;
     readonly name: string;
     readonly arguments: string;
@@ -96,106 +141,198 @@ export type StreamEvent = Data.TaggedEnum<{
 }>;
 export const StreamEvent = Data.taggedEnum<StreamEvent>();
 
+/**
+ * An interface which provides the low-level stream from some LLM provider.
+ */
 export interface Provider {
   readonly stream: (
-    params: StreamParams,
+    params: StreamParams<any>,
   ) => Stream.Stream<
     StreamEvent,
-    HttpClientError | ResponseError | HttpBodyError | UnknownException,
+    HttpClientError | HttpBodyError | UnknownException,
     Scope.Scope
   >;
 }
 
+/**
+ * A tag for the generation context.
+ */
 export class Generation extends Context.Tag("Generation")<
   Generation,
   Provider
 >() {}
 
+/**
+ * The result of a function call.
+ */
 export type FunctionResult<RS, RE> = Data.TaggedEnum<{
-  FunctionResultSuccess: { readonly id: string; readonly result: RS };
-  FunctionResultError: { readonly id: string; readonly result: RE };
+  FunctionResultSuccess: {
+    readonly id: string;
+    readonly name: string;
+    readonly result: RS;
+  };
+  FunctionResultError: {
+    readonly id: string;
+    readonly name: string;
+    readonly result: RE;
+  };
 }>;
 
 interface FunctionResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
   readonly taggedEnum: FunctionResult<this["A"], this["B"]>;
 }
 
+/**
+ * The result of a function call.
+ */
 export const FunctionResult = Data.taggedEnum<FunctionResultDefinition>();
 
-class InvalidFunctionCallError extends Data.TaggedError(
+/**
+ * An error that occurs when a function call is invalid.
+ */
+export class InvalidFunctionCallError extends Data.TaggedError(
   "InvalidFunctionCallError",
 )<{
-  readonly functionCall: Extract<StreamEvent, { _tag: "FunctionCall" }>;
+  readonly functionCall: TaggedEnum.Value<StreamEvent, "FunctionCall">;
   readonly error: ParseError;
+}> {
+  message = this.error.message;
+}
+
+/**
+ * An error that occurs when an LLM attempts to call an unknown function.
+ */
+export class UnknownFunctionCallError extends Data.TaggedError(
+  "UnknownFunctionCallError",
+)<{
+  readonly functionCall: TaggedEnum.Value<StreamEvent, "FunctionCall">;
+}> {
+  message = `Unknown function call: ${this.functionCall.name}`;
+}
+
+/**
+ * An error that occurs when a function fails to execute.
+ */
+export class FunctionExecutionError<R> extends Data.TaggedError(
+  "FunctionExecutionError",
+)<{
+  readonly id: string;
+  readonly error: R;
 }> {}
 
-export function streamTools(
-  params: StreamParams,
+/**
+ * Generate a stream of events from the LLM provider, invoking the defined
+ * functions as needed and returning the results to the LLM.
+ *
+ * This will loop until the maxIterations is reached, or until the stream
+ * completes with no more function calls.
+ *
+ * @param params The parameters to configure the stream generation call
+ * @returns A stream of events from the LLM provider
+ */
+export function streamTools<FnDefns extends Readonly<FunctionDefinitionAny[]>>(
+  params: StreamParams<FnDefns>,
 ): Stream.Stream<
   StreamEvent | FunctionResult<unknown, unknown>,
-  HttpClientError | HttpBodyError | UnknownException,
-  Scope.Scope
+  | ParseError
+  | HttpClientError
+  | HttpBodyError
+  | UnknownException
+  | FunctionExecutionError<unknown>
+  | FunctionDefinitionError<FnDefns[number]>,
+  Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
 > {
   return Stream.asyncEffect<
     StreamEvent | FunctionResult<unknown, unknown>,
-    HttpClientError | HttpBodyError | UnknownException,
-    Scope.Scope
-  >((emit) =>
-    Effect.gen(function* () {
-      const gen = yield* Generation;
+    | ParseError
+    | HttpClientError
+    | HttpBodyError
+    | UnknownException
+    | FunctionExecutionError<unknown>
+    | FunctionDefinitionError<FnDefns[number]>,
+    Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+  >(
+    (emit) =>
+      Effect.gen(function* () {
+        if (params.maxIterations === 0) {
+          yield* Effect.log("Max iterations reached");
+          return;
+        }
 
-      const single = (event: StreamEvent | FunctionResult<unknown, unknown>) =>
-        Effect.promise(() => emit.single(event));
-      const end = () => Effect.promise(() => emit.end());
-      const fail = (
-        error: HttpClientError | HttpBodyError | UnknownException,
-      ) => Effect.promise(() => emit.fail(error));
+        const gen = yield* Generation;
 
-      const fnCalls: {
-        id: string;
-        name: string;
-        args: string;
-        input: unknown;
-        fnDefn: FunctionDefinition<any, any, any, any, any, any, any>;
-      }[] = [];
+        const single = (
+          event: StreamEvent | FunctionResult<unknown, unknown>,
+        ) => Effect.promise(() => emit.single(event));
 
-      return yield* gen.stream(params).pipe(
-        Stream.runForEach((event) =>
-          Effect.gen(function* () {
-            if (event._tag === "FunctionCall") {
-              const fnDefn = Array.findFirst(
-                params.functions ?? [],
-                (f) => f.name === event.name,
-              ).pipe(
-                Option.getOrThrowWith(() => new Error("No function found")),
-              );
+        const end = () => Effect.promise(() => emit.end());
 
-              const input = yield* Schema.decodeUnknown(
-                Schema.parseJson(fnDefn.input),
-              )(event.arguments).pipe(
-                Effect.catchTag("ParseError", (err) =>
-                  Effect.fail(
-                    new InvalidFunctionCallError({
-                      functionCall: event,
-                      error: err,
-                    }),
-                  ),
-                ),
-              );
+        const fail = (
+          error:
+            | ParseError
+            | HttpClientError
+            | HttpBodyError
+            | UnknownException
+            | FunctionExecutionError<unknown>
+            | FunctionDefinitionError<FnDefns[number]>,
+        ) => Effect.promise(() => emit.fail(error));
 
-              fnCalls.push({
-                id: event.id,
-                name: event.name,
-                args: event.arguments,
-                input,
-                fnDefn,
-              });
-            }
+        const fnCalls: {
+          id: string;
+          name: string;
+          args: string;
+          input: unknown;
+          fnDefn: FnDefns[number];
+        }[] = [];
 
-            yield* single(event);
-          }),
-        ),
-        Effect.catchTag("InvalidFunctionCallError", (error) =>
+        // On each event, we first check to see if it's a function call and record
+        // it. Then, we emit the event.
+        const onStreamEvent = (event: StreamEvent) =>
+          pipe(
+            event,
+            Match.type<StreamEvent>().pipe(
+              Match.tag("FunctionCall", (functionCall) =>
+                Effect.gen(function* () {
+                  const fnFound = Array.findFirst(
+                    params.functions ?? [],
+                    (fn) => fn.name === functionCall.name,
+                  );
+
+                  if (Option.isNone(fnFound)) {
+                    return yield* Effect.fail(
+                      new UnknownFunctionCallError({ functionCall }),
+                    );
+                  }
+
+                  const input: unknown = yield* S.decodeUnknown(
+                    S.parseJson(fnFound.value.input),
+                  )(functionCall.arguments).pipe(
+                    Effect.catchTag("ParseError", (error) =>
+                      Effect.fail(
+                        new InvalidFunctionCallError({ functionCall, error }),
+                      ),
+                    ),
+                  );
+
+                  fnCalls.push({
+                    id: functionCall.id,
+                    name: functionCall.name,
+                    args: functionCall.arguments,
+                    input,
+                    fnDefn: fnFound.value,
+                  });
+
+                  return event;
+                }),
+              ),
+              Match.orElse((event) => Effect.succeed(event)),
+            ),
+            Effect.flatMap(single),
+          );
+
+        const onInvalidFunctionCall = (
+          error: InvalidFunctionCallError | UnknownFunctionCallError,
+        ) =>
           Effect.gen(function* () {
             yield* single(
               StreamEvent.InvalidFunctionCall({
@@ -205,8 +342,7 @@ export function streamTools(
               }),
             );
 
-            // NOTE: This could result in a parse error, but only if the model returns invalid JSON.
-            const input = Schema.decodeUnknown(Schema.parseJson())(
+            const input = yield* S.decodeUnknown(S.parseJson())(
               error.functionCall.arguments,
             );
 
@@ -218,94 +354,128 @@ export function streamTools(
 
             const failedToolResult = new ToolResultErrorEvent({
               id: error.functionCall.id,
-              result: error.error.message,
+              result: error.message,
             });
 
             yield* streamTools({
               ...params,
               events: [...params.events, failedToolCall, failedToolResult],
-            }).pipe(Stream.runForEach((e) => single(e)));
-          }),
-        ),
-        Effect.andThen(() =>
-          Effect.gen(function* () {
-            if (fnCalls.length === 0) {
-              return yield* end();
-            }
+              maxIterations:
+                params.maxIterations == null
+                  ? params.maxIterations
+                  : params.maxIterations - 1,
+            }).pipe(Stream.runForEach((event) => single(event)));
+          });
 
-            const newEvents: ThreadEvent[] = [];
+        const handleFunctionCalls = Effect.gen(function* () {
+          if (fnCalls.length === 0) {
+            return yield* end();
+          }
 
-            for (const fnCall of fnCalls) {
-              const toolCallEvent = new ToolUseEvent({
-                id: fnCall.id,
-                name: fnCall.name,
-                input: fnCall.input,
-              });
+          const newEvents: ThreadEvent[] = [];
 
-              const output = yield* fnCall.fnDefn.function(
-                fnCall.id,
-                fnCall.input,
+          for (const fnCall of fnCalls) {
+            const toolCallEvent = new ToolUseEvent({
+              id: fnCall.id,
+              name: fnCall.name,
+              input: fnCall.input,
+            });
+
+            const output: Either.Either<
+              any,
+              FunctionError<any>
+            > = yield* fnCall.fnDefn.function(fnCall.id, fnCall.input).pipe(
+              Effect.map(Either.right),
+              Effect.catchTag("FunctionError", (err) =>
+                Effect.succeed(Either.left(err)),
+              ),
+              Effect.catchAll((error: unknown) =>
+                Effect.fail(
+                  new FunctionExecutionError({ id: fnCall.id, error }),
+                ),
+              ),
+            );
+
+            newEvents.push(toolCallEvent);
+
+            if (Either.isRight(output)) {
+              yield* single(
+                FunctionResult.FunctionResultSuccess({
+                  id: fnCall.id,
+                  name: fnCall.name,
+                  result: output.right as unknown,
+                }),
               );
 
-              newEvents.push(toolCallEvent);
-
-              yield* Match.type<FunctionReturn<unknown, unknown>>().pipe(
-                Match.tags({
-                  Success: () =>
-                    Effect.gen(function* () {
-                      yield* single(
-                        FunctionResult.FunctionResultSuccess({
-                          id: fnCall.id,
-                          result: output.result,
-                        }),
-                      );
-
-                      newEvents.push(
-                        new ToolResultSuccessEvent({
-                          id: fnCall.id,
-                          result: output.result,
-                        }),
-                      );
-                    }),
-                  Error: () =>
-                    Effect.gen(function* () {
-                      yield* single(
-                        FunctionResult.FunctionResultError({
-                          id: fnCall.id,
-                          result: output.result,
-                        }),
-                      );
-
-                      newEvents.push(
-                        new ToolResultErrorEvent({
-                          id: fnCall.id,
-                          result: output.result,
-                        }),
-                      );
-                    }),
+              newEvents.push(
+                new ToolResultSuccessEvent({
+                  id: fnCall.id,
+                  result: output.right as unknown,
                 }),
-                Match.exhaustive,
-              )(output);
+              );
+            } else if (Either.isLeft(output)) {
+              yield* single(
+                FunctionResult.FunctionResultError({
+                  id: fnCall.id,
+                  name: fnCall.name,
+                  result: output.left.payload as unknown,
+                }),
+              );
+
+              newEvents.push(
+                new ToolResultErrorEvent({
+                  id: fnCall.id,
+                  result: output.left.payload as unknown,
+                }),
+              );
             }
+          }
 
-            if (newEvents.length === 0) {
-              return;
-            }
+          if (newEvents.length === 0) {
+            return;
+          }
 
-            const newParams: StreamParams = {
-              ...params,
-              events: [...params.events, ...newEvents],
-            };
+          const newParams = {
+            ...params,
+            events: [...params.events, ...newEvents],
+            maxIterations:
+              params.maxIterations == null
+                ? params.maxIterations
+                : params.maxIterations - 1,
+          };
 
-            yield* streamTools(newParams).pipe(
-              Stream.runForEach((e) => single(e)),
-            );
-          }),
-        ),
-        Effect.catchAll((err) => fail(err)),
-        Effect.andThen(() => end()),
-        Effect.fork,
-      );
-    }),
+          yield* streamTools(newParams).pipe(
+            Stream.runForEach((e) => single(e)),
+          );
+        });
+
+        yield* gen.stream(params).pipe(
+          Stream.runForEach(onStreamEvent),
+          Effect.catchIf(
+            (err): err is InvalidFunctionCallError =>
+              err instanceof InvalidFunctionCallError,
+            (error) => onInvalidFunctionCall(error),
+          ),
+          Effect.catchIf(
+            (err): err is UnknownFunctionCallError =>
+              err instanceof UnknownFunctionCallError,
+            (error) => onInvalidFunctionCall(error),
+          ),
+          Effect.andThen(() => handleFunctionCalls),
+          Effect.catchAll((error) => fail(error)),
+          Effect.catchAllDefect((defect) => fail(new UnknownException(defect))),
+          Effect.andThen(() => end()),
+          Effect.forkScoped,
+        );
+      }) as Effect.Effect<
+        void,
+        | ParseError
+        | HttpClientError
+        | HttpBodyError
+        | UnknownException
+        | FunctionExecutionError<unknown>
+        | FunctionDefinitionError<FnDefns[number]>,
+        Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+      >,
   );
 }

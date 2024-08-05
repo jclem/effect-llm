@@ -11,14 +11,9 @@ import {
   Stream,
   type Scope,
 } from "effect";
-import type { NonEmptyArray } from "effect/Array";
 import type { UnknownException } from "effect/Cause";
-import {
-  StreamEvent,
-  type FunctionDefinition,
-  type Provider,
-  type StreamParams,
-} from "../generate";
+import type { FunctionDefinitionAny } from "../generate";
+import { StreamEvent, type Provider, type StreamParams } from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread";
 
@@ -78,13 +73,13 @@ const ContentBlockStop = S.parseJson(
   }),
 );
 
-const ContentBlockEvent = S.Union(
+const AnthropicStreamEvent = S.Union(
   ContentBlockStart,
   ContentBlockDelta,
   ContentBlockStop,
 );
-type ContentBlockEvent = typeof ContentBlockEvent.Type;
-const decodeContentBlockEvent = S.decodeUnknownOption(ContentBlockEvent);
+type ContentBlockEvent = typeof AnthropicStreamEvent.Type;
+const decodeContentBlockEvent = S.decodeUnknownOption(AnthropicStreamEvent);
 
 export const make = (): Effect.Effect<
   Provider,
@@ -102,6 +97,7 @@ export const make = (): Effect.Effect<
       Effect.map(
         HttpClient.mapRequest(
           HttpClientRequest.setHeaders({
+            "Anthropic-Beta": "max-tokens-3-5-sonnet-2024-07-15",
             "Anthropic-Version": "2023-06-01",
             "Content-Type": "application/json",
           }),
@@ -110,7 +106,10 @@ export const make = (): Effect.Effect<
     );
 
     return {
-      stream(params: StreamParams) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stream<F extends Readonly<FunctionDefinitionAny[]>>(
+        params: StreamParams<F>,
+      ) {
         return HttpClientRequest.post("/v1/messages").pipe(
           HttpClientRequest.setHeader(
             "X-API-Key",
@@ -152,7 +151,7 @@ export const make = (): Effect.Effect<
             >(
               stream,
               Match.type<ContentBlockEvent>().pipe(
-                Match.discriminators("type")({
+                Match.discriminatorsExhaustive("type")({
                   content_block_start: (event) => {
                     switch (event.content_block.type) {
                       case "text":
@@ -244,7 +243,6 @@ export const make = (): Effect.Effect<
                     }
                   },
                 }),
-                Match.exhaustive,
               ),
             );
           },
@@ -388,11 +386,7 @@ const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
     )(event),
 );
 
-const gatherTools = (
-  tools: Readonly<
-    NonEmptyArray<FunctionDefinition<string, any, any, any, any, any>>
-  >,
-) =>
+const gatherTools = (tools: Readonly<FunctionDefinitionAny[]>) =>
   tools.map((tool) => ({
     name: tool.name,
     description: tool.description,

@@ -1,13 +1,8 @@
 import { HttpClient, HttpClientRequest } from "@effect/platform";
 import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
-import type { NonEmptyArray } from "effect/Array";
-import {
-  StreamEvent,
-  type FunctionDefinition,
-  type Provider,
-  type StreamParams,
-} from "../generate";
+import type { FunctionDefinitionAny } from "../generate";
+import { StreamEvent, type Provider, type StreamParams } from "../generate";
 import { filterParsedEvents, streamSSE } from "../sse";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread";
 
@@ -71,7 +66,9 @@ export const make = (): Effect.Effect<
     );
 
     return {
-      stream(params: StreamParams) {
+      stream<F extends Readonly<FunctionDefinitionAny[]>>(
+        params: StreamParams<F>,
+      ) {
         return HttpClientRequest.post("/v1/chat/completions").pipe(
           HttpClientRequest.setHeader(
             "Authorization",
@@ -154,11 +151,7 @@ export const make = (): Effect.Effect<
     };
   });
 
-const gatherTools = (
-  tools: Readonly<
-    NonEmptyArray<FunctionDefinition<string, any, any, any, any, any>>
-  >,
-) =>
+const gatherTools = (tools: Readonly<FunctionDefinitionAny[]>) =>
   tools.map((tool) => ({
     type: "function",
     function: {
@@ -170,7 +163,7 @@ const gatherTools = (
 
 const messagesFromEvents = Array.filterMap(
   Match.type<ThreadEvent>().pipe(
-    Match.tags({
+    Match.tagsExhaustive({
       SystemMessage: (message) =>
         Option.some({
           role: Role.System,
@@ -213,6 +206,5 @@ const messagesFromEvents = Array.filterMap(
           content: JSON.stringify(event.result),
         }),
     }),
-    Match.exhaustive,
   ),
 );
