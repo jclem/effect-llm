@@ -106,7 +106,6 @@ export const make = (): Effect.Effect<
     );
 
     return {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       stream<F extends Readonly<FunctionDefinitionAny[]>>(
         params: StreamParams<F>,
       ) {

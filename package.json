@@ -22,7 +22,9 @@
   "scripts": {
     "build": "tsc --outDir dist",
     "publish-package": "bun run build && npm publish",
-    "check:prettier": "prettier --check ."
+    "check": "konk run c -cgL -n'check:*'",
+    "check:prettier": "prettier --check .",
+    "check:eslint": "eslint ."
   },
   "exports": {
     ".": {
@@ -51,10 +53,18 @@
   },
   "devDependencies": {
     "@effect/platform-bun": "^0.41.4",
+    "@eslint/js": "^9.8.0",
     "@types/bun": "^1.1.6",
-    "prettier": "^3.3.3"
+    "eslint": "9.x",
+    "globals": "^15.9.0",
+    "konk": "^0.29.2",
+    "prettier": "^3.3.3",
+    "typescript-eslint": "^8.0.1"
   },
   "peerDependencies": {
     "typescript": "^5.5.4"
-  }
+  },
+  "trustedDependencies": [
+    "konk"
+  ]
 }

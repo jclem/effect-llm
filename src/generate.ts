@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import type { HttpBodyError } from "@effect/platform/HttpBody";
 import type { HttpClientError } from "@effect/platform/HttpClientError";
 import { Schema as S } from "@effect/schema";
