@@ -20,8 +20,6 @@
   "bugs": "https://github.com/jclem/effect-llm/issues",
   "type": "module",
   "scripts": {
-    "build": "tsc --outDir dist",
-    "publish-package": "rm -rf ./dist && bun run build && npm publish",
     "check": "konk run c -cgL -n'check:*'",
     "check:prettier": "prettier --check .",
     "check:eslint": "eslint ."
