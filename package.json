@@ -19,6 +19,10 @@
   },
   "bugs": "https://github.com/jclem/effect-llm/issues",
   "type": "module",
+  "files": [
+    "LICENSE.md",
+    "dist"
+  ],
   "scripts": {
     "check": "konk run c -cgL -n'check:*'",
     "check:prettier": "prettier --check .",
