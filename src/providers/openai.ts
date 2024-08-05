@@ -9,6 +9,7 @@ import { AssistantMessage, Role, type ThreadEvent } from "../thread";
 export enum Model {
   GPT4Turbo = "gpt-4-turbo",
   GPT4o = "gpt-4o",
+  GPT4oMini = "gpt-4o-mini",
 }
 
 const ChatCompletionChunk = S.parseJson(
