@@ -19,6 +19,7 @@ import {
 } from "effect";
 import { UnknownException } from "effect/Cause";
 import type { TaggedEnum } from "effect/Data";
+import { dual } from "effect/Function";
 import {
   ToolResultErrorEvent,
   ToolResultSuccessEvent,
@@ -223,28 +224,60 @@ export class FunctionExecutionError<R> extends Data.TaggedError(
 }> {}
 
 /**
+ * Generate a stream of events from the LLM provider.
+ *
+ * @param provider The provider to generate the stream from
+ * @param params The parameters to configure the stream generation call
+ * @returns A stream of events from the LLM provider
+ */
+export const stream: {
+  <F extends Readonly<FunctionDefinitionAny[]>>(
+    params: StreamParams<F>,
+  ): (
+    provider: Provider,
+  ) => Stream.Stream<
+    StreamEvent | FunctionResult<unknown, unknown>,
+    | ParseError
+    | HttpClientError
+    | HttpBodyError
+    | UnknownException
+    | FunctionExecutionError<unknown>
+    | FunctionDefinitionError<F[number]>,
+    Generation | Scope.Scope | FunctionDefinitionContext<F[number]>
+  >;
+  <F extends Readonly<FunctionDefinitionAny[]>>(
+    provider: Provider,
+    params: StreamParams<F>,
+  ): Stream.Stream<
+    StreamEvent,
+    HttpClientError | HttpBodyError | UnknownException,
+    Scope.Scope
+  >;
+} = dual(
+  2,
+  <F extends Readonly<FunctionDefinitionAny[]>>(
+    provider: Provider,
+    params: StreamParams<F>,
+  ) => provider.stream(params),
+);
+
+/**
  * Generate a stream of events from the LLM provider, invoking the defined
  * functions as needed and returning the results to the LLM.
  *
  * This will loop until the maxIterations is reached, or until the stream
  * completes with no more function calls.
  *
+ * @param provider The provider to generate the stream from
  * @param params The parameters to configure the stream generation call
  * @returns A stream of events from the LLM provider
  */
-export function streamTools<FnDefns extends Readonly<FunctionDefinitionAny[]>>(
-  params: StreamParams<FnDefns>,
-): Stream.Stream<
-  StreamEvent | FunctionResult<unknown, unknown>,
-  | ParseError
-  | HttpClientError
-  | HttpBodyError
-  | UnknownException
-  | FunctionExecutionError<unknown>
-  | FunctionDefinitionError<FnDefns[number]>,
-  Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
-> {
-  return Stream.asyncEffect<
+export const streamTools: {
+  <FnDefns extends Readonly<FunctionDefinitionAny[]>>(
+    params: StreamParams<FnDefns>,
+  ): (
+    provider: Provider,
+  ) => Stream.Stream<
     StreamEvent | FunctionResult<unknown, unknown>,
     | ParseError
     | HttpClientError
@@ -253,231 +286,261 @@ export function streamTools<FnDefns extends Readonly<FunctionDefinitionAny[]>>(
     | FunctionExecutionError<unknown>
     | FunctionDefinitionError<FnDefns[number]>,
     Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
-  >(
-    (emit) =>
-      Effect.gen(function* () {
-        if (params.maxIterations === 0) {
-          yield* Effect.log("Max iterations reached");
-          return;
-        }
+  >;
+  <FnDefns extends Readonly<FunctionDefinitionAny[]>>(
+    provider: Provider,
+    params: StreamParams<FnDefns>,
+  ): Stream.Stream<
+    StreamEvent | FunctionResult<unknown, unknown>,
+    | ParseError
+    | HttpClientError
+    | HttpBodyError
+    | UnknownException
+    | FunctionExecutionError<unknown>
+    | FunctionDefinitionError<FnDefns[number]>,
+    Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+  >;
+} = dual(
+  2,
+  <FnDefns extends Readonly<FunctionDefinitionAny[]>>(
+    provider: Provider,
+    params: StreamParams<FnDefns>,
+  ) => {
+    return Stream.asyncEffect<
+      StreamEvent | FunctionResult<unknown, unknown>,
+      | ParseError
+      | HttpClientError
+      | HttpBodyError
+      | UnknownException
+      | FunctionExecutionError<unknown>
+      | FunctionDefinitionError<FnDefns[number]>,
+      Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+    >(
+      (emit) =>
+        Effect.gen(function* () {
+          if (params.maxIterations === 0) {
+            yield* Effect.log("Max iterations reached");
+            return;
+          }
 
-        const gen = yield* Generation;
+          const single = (
+            event: StreamEvent | FunctionResult<unknown, unknown>,
+          ) => Effect.promise(() => emit.single(event));
 
-        const single = (
-          event: StreamEvent | FunctionResult<unknown, unknown>,
-        ) => Effect.promise(() => emit.single(event));
+          const end = () => Effect.promise(() => emit.end());
 
-        const end = () => Effect.promise(() => emit.end());
+          const fail = (
+            error:
+              | ParseError
+              | HttpClientError
+              | HttpBodyError
+              | UnknownException
+              | FunctionExecutionError<unknown>
+              | FunctionDefinitionError<FnDefns[number]>,
+          ) => Effect.promise(() => emit.fail(error));
 
-        const fail = (
-          error:
-            | ParseError
-            | HttpClientError
-            | HttpBodyError
-            | UnknownException
-            | FunctionExecutionError<unknown>
-            | FunctionDefinitionError<FnDefns[number]>,
-        ) => Effect.promise(() => emit.fail(error));
+          const fnCalls: {
+            id: string;
+            name: string;
+            args: string;
+            input: unknown;
+            fnDefn: FnDefns[number];
+          }[] = [];
 
-        const fnCalls: {
-          id: string;
-          name: string;
-          args: string;
-          input: unknown;
-          fnDefn: FnDefns[number];
-        }[] = [];
-
-        // On each event, we first check to see if it's a function call and record
-        // it. Then, we emit the event.
-        const onStreamEvent = (event: StreamEvent) =>
-          pipe(
-            event,
-            Match.type<StreamEvent>().pipe(
-              Match.tag("FunctionCall", (functionCall) =>
-                Effect.gen(function* () {
-                  const fnFound = Array.findFirst(
-                    params.functions ?? [],
-                    (fn) => fn.name === functionCall.name,
-                  );
-
-                  if (Option.isNone(fnFound)) {
-                    return yield* Effect.fail(
-                      new UnknownFunctionCallError({ functionCall }),
+          // On each event, we first check to see if it's a function call and record
+          // it. Then, we emit the event.
+          const onStreamEvent = (event: StreamEvent) =>
+            pipe(
+              event,
+              Match.type<StreamEvent>().pipe(
+                Match.tag("FunctionCall", (functionCall) =>
+                  Effect.gen(function* () {
+                    const fnFound = Array.findFirst(
+                      params.functions ?? [],
+                      (fn) => fn.name === functionCall.name,
                     );
-                  }
 
-                  const input: unknown = yield* S.decodeUnknown(
-                    S.parseJson(fnFound.value.input),
-                  )(functionCall.arguments).pipe(
-                    Effect.catchTag("ParseError", (error) =>
-                      Effect.fail(
-                        new InvalidFunctionCallError({ functionCall, error }),
+                    if (Option.isNone(fnFound)) {
+                      return yield* Effect.fail(
+                        new UnknownFunctionCallError({ functionCall }),
+                      );
+                    }
+
+                    const input: unknown = yield* S.decodeUnknown(
+                      S.parseJson(fnFound.value.input),
+                    )(functionCall.arguments).pipe(
+                      Effect.catchTag("ParseError", (error) =>
+                        Effect.fail(
+                          new InvalidFunctionCallError({ functionCall, error }),
+                        ),
                       ),
-                    ),
-                  );
+                    );
 
-                  fnCalls.push({
-                    id: functionCall.id,
-                    name: functionCall.name,
-                    args: functionCall.arguments,
-                    input,
-                    fnDefn: fnFound.value,
-                  });
+                    fnCalls.push({
+                      id: functionCall.id,
+                      name: functionCall.name,
+                      args: functionCall.arguments,
+                      input,
+                      fnDefn: fnFound.value,
+                    });
 
-                  return event;
-                }),
+                    return event;
+                  }),
+                ),
+                Match.orElse((event) => Effect.succeed(event)),
               ),
-              Match.orElse((event) => Effect.succeed(event)),
-            ),
-            Effect.flatMap(single),
-          );
+              Effect.flatMap(single),
+            );
 
-        const onInvalidFunctionCall = (
-          error: InvalidFunctionCallError | UnknownFunctionCallError,
-        ) =>
-          Effect.gen(function* () {
-            yield* single(
-              StreamEventEnum.InvalidFunctionCall({
+          const onInvalidFunctionCall = (
+            error: InvalidFunctionCallError | UnknownFunctionCallError,
+          ) =>
+            Effect.gen(function* () {
+              yield* single(
+                StreamEventEnum.InvalidFunctionCall({
+                  id: error.functionCall.id,
+                  name: error.functionCall.name,
+                  arguments: error.functionCall.arguments,
+                }),
+              );
+
+              const input = yield* S.decodeUnknown(S.parseJson())(
+                error.functionCall.arguments,
+              );
+
+              const failedToolCall = new ToolUseEvent({
                 id: error.functionCall.id,
                 name: error.functionCall.name,
-                arguments: error.functionCall.arguments,
-              }),
-            );
+                input,
+              });
 
-            const input = yield* S.decodeUnknown(S.parseJson())(
-              error.functionCall.arguments,
-            );
+              const failedToolResult = new ToolResultErrorEvent({
+                id: error.functionCall.id,
+                result: error.message,
+              });
 
-            const failedToolCall = new ToolUseEvent({
-              id: error.functionCall.id,
-              name: error.functionCall.name,
-              input,
+              yield* streamTools(provider, {
+                ...params,
+                events: [...params.events, failedToolCall, failedToolResult],
+                maxIterations:
+                  params.maxIterations == null
+                    ? params.maxIterations
+                    : params.maxIterations - 1,
+              }).pipe(Stream.runForEach((event) => single(event)));
             });
 
-            const failedToolResult = new ToolResultErrorEvent({
-              id: error.functionCall.id,
-              result: error.message,
-            });
+          const handleFunctionCalls = Effect.gen(function* () {
+            if (fnCalls.length === 0) {
+              return yield* end();
+            }
 
-            yield* streamTools({
+            const newEvents: ThreadEvent[] = [];
+
+            for (const fnCall of fnCalls) {
+              const toolCallEvent = new ToolUseEvent({
+                id: fnCall.id,
+                name: fnCall.name,
+                input: fnCall.input,
+              });
+
+              const output: Either.Either<
+                any,
+                FunctionError<any>
+              > = yield* fnCall.fnDefn.function(fnCall.id, fnCall.input).pipe(
+                Effect.map(Either.right),
+                Effect.catchTag("FunctionError", (err) =>
+                  Effect.succeed(Either.left(err)),
+                ),
+                Effect.catchAll((error: unknown) =>
+                  Effect.fail(
+                    new FunctionExecutionError({ id: fnCall.id, error }),
+                  ),
+                ),
+              );
+
+              newEvents.push(toolCallEvent);
+
+              if (Either.isRight(output)) {
+                yield* single(
+                  FunctionResultEnum.FunctionResultSuccess({
+                    id: fnCall.id,
+                    name: fnCall.name,
+                    result: output.right as unknown,
+                  }),
+                );
+
+                newEvents.push(
+                  new ToolResultSuccessEvent({
+                    id: fnCall.id,
+                    result: output.right as unknown,
+                  }),
+                );
+              } else if (Either.isLeft(output)) {
+                yield* single(
+                  FunctionResultEnum.FunctionResultError({
+                    id: fnCall.id,
+                    name: fnCall.name,
+                    result: output.left.payload as unknown,
+                  }),
+                );
+
+                newEvents.push(
+                  new ToolResultErrorEvent({
+                    id: fnCall.id,
+                    result: output.left.payload as unknown,
+                  }),
+                );
+              }
+            }
+
+            if (newEvents.length === 0) {
+              return;
+            }
+
+            const newParams = {
               ...params,
-              events: [...params.events, failedToolCall, failedToolResult],
+              events: [...params.events, ...newEvents],
               maxIterations:
                 params.maxIterations == null
                   ? params.maxIterations
                   : params.maxIterations - 1,
-            }).pipe(Stream.runForEach((event) => single(event)));
+            };
+
+            yield* streamTools(provider, newParams).pipe(
+              Stream.runForEach((e) => single(e)),
+            );
           });
 
-        const handleFunctionCalls = Effect.gen(function* () {
-          if (fnCalls.length === 0) {
-            return yield* end();
-          }
-
-          const newEvents: ThreadEvent[] = [];
-
-          for (const fnCall of fnCalls) {
-            const toolCallEvent = new ToolUseEvent({
-              id: fnCall.id,
-              name: fnCall.name,
-              input: fnCall.input,
-            });
-
-            const output: Either.Either<
-              any,
-              FunctionError<any>
-            > = yield* fnCall.fnDefn.function(fnCall.id, fnCall.input).pipe(
-              Effect.map(Either.right),
-              Effect.catchTag("FunctionError", (err) =>
-                Effect.succeed(Either.left(err)),
-              ),
-              Effect.catchAll((error: unknown) =>
-                Effect.fail(
-                  new FunctionExecutionError({ id: fnCall.id, error }),
-                ),
-              ),
-            );
-
-            newEvents.push(toolCallEvent);
-
-            if (Either.isRight(output)) {
-              yield* single(
-                FunctionResultEnum.FunctionResultSuccess({
-                  id: fnCall.id,
-                  name: fnCall.name,
-                  result: output.right as unknown,
-                }),
-              );
-
-              newEvents.push(
-                new ToolResultSuccessEvent({
-                  id: fnCall.id,
-                  result: output.right as unknown,
-                }),
-              );
-            } else if (Either.isLeft(output)) {
-              yield* single(
-                FunctionResultEnum.FunctionResultError({
-                  id: fnCall.id,
-                  name: fnCall.name,
-                  result: output.left.payload as unknown,
-                }),
-              );
-
-              newEvents.push(
-                new ToolResultErrorEvent({
-                  id: fnCall.id,
-                  result: output.left.payload as unknown,
-                }),
-              );
-            }
-          }
-
-          if (newEvents.length === 0) {
-            return;
-          }
-
-          const newParams = {
-            ...params,
-            events: [...params.events, ...newEvents],
-            maxIterations:
-              params.maxIterations == null
-                ? params.maxIterations
-                : params.maxIterations - 1,
-          };
-
-          yield* streamTools(newParams).pipe(
-            Stream.runForEach((e) => single(e)),
+          yield* provider.stream(params).pipe(
+            Stream.runForEach(onStreamEvent),
+            Effect.catchIf(
+              (err): err is InvalidFunctionCallError =>
+                err instanceof InvalidFunctionCallError,
+              (error) => onInvalidFunctionCall(error),
+            ),
+            Effect.catchIf(
+              (err): err is UnknownFunctionCallError =>
+                err instanceof UnknownFunctionCallError,
+              (error) => onInvalidFunctionCall(error),
+            ),
+            Effect.andThen(() => handleFunctionCalls),
+            Effect.catchAll((error) => fail(error)),
+            Effect.catchAllDefect((defect) =>
+              fail(new UnknownException(defect)),
+            ),
+            Effect.andThen(() => end()),
+            Effect.forkScoped,
           );
-        });
-
-        yield* gen.stream(params).pipe(
-          Stream.runForEach(onStreamEvent),
-          Effect.catchIf(
-            (err): err is InvalidFunctionCallError =>
-              err instanceof InvalidFunctionCallError,
-            (error) => onInvalidFunctionCall(error),
-          ),
-          Effect.catchIf(
-            (err): err is UnknownFunctionCallError =>
-              err instanceof UnknownFunctionCallError,
-            (error) => onInvalidFunctionCall(error),
-          ),
-          Effect.andThen(() => handleFunctionCalls),
-          Effect.catchAll((error) => fail(error)),
-          Effect.catchAllDefect((defect) => fail(new UnknownException(defect))),
-          Effect.andThen(() => end()),
-          Effect.forkScoped,
-        );
-      }) as Effect.Effect<
-        void,
-        | ParseError
-        | HttpClientError
-        | HttpBodyError
-        | UnknownException
-        | FunctionExecutionError<unknown>
-        | FunctionDefinitionError<FnDefns[number]>,
-        Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
-      >,
-  );
-}
+        }) as Effect.Effect<
+          void,
+          | ParseError
+          | HttpClientError
+          | HttpBodyError
+          | UnknownException
+          | FunctionExecutionError<unknown>
+          | FunctionDefinitionError<FnDefns[number]>,
+          Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+        >,
+    );
+  },
+);
