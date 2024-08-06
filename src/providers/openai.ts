@@ -1,8 +1,12 @@
 import { HttpClient, HttpClientRequest } from "@effect/platform";
 import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
-import type { FunctionDefinitionAny } from "../generate.js";
-import { StreamEvent, type Provider, type StreamParams } from "../generate.js";
+import type { FunctionDefinitionAny } from "../generation.js";
+import {
+  StreamEvent,
+  type Provider,
+  type StreamParams,
+} from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
 

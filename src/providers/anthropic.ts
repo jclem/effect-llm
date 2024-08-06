@@ -12,8 +12,12 @@ import {
   type Scope,
 } from "effect";
 import type { UnknownException } from "effect/Cause";
-import type { FunctionDefinitionAny } from "../generate.js";
-import { StreamEvent, type Provider, type StreamParams } from "../generate.js";
+import type { FunctionDefinitionAny } from "../generation.js";
+import {
+  StreamEvent,
+  type Provider,
+  type StreamParams,
+} from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
 
