@@ -12,9 +12,9 @@ import {
   type Scope,
 } from "effect";
 import type { UnknownException } from "effect/Cause";
-import type { FunctionDefinitionAny } from "../generation.js";
+import type { FunctionDefinitionAny, StreamEvent } from "../generation.js";
 import {
-  StreamEvent,
+  StreamEventEnum,
   type Provider,
   type StreamParams,
 } from "../generation.js";
@@ -163,7 +163,7 @@ export const make = (): Effect.Effect<
                           index: event.index,
                           text: "",
                         });
-                        return [StreamEvent.ContentStart({ content: "" })];
+                        return [StreamEventEnum.ContentStart({ content: "" })];
                       case "tool_use":
                         blocks.push({
                           type: "toolUse",
@@ -175,7 +175,7 @@ export const make = (): Effect.Effect<
                           },
                         });
                         return [
-                          StreamEvent.FunctionCallStart({
+                          StreamEventEnum.FunctionCallStart({
                             id: event.content_block.id,
                             name: event.content_block.name,
                           }),
@@ -198,7 +198,9 @@ export const make = (): Effect.Effect<
                         block.text += event.delta.text;
 
                         return [
-                          StreamEvent.Content({ content: event.delta.text }),
+                          StreamEventEnum.Content({
+                            content: event.delta.text,
+                          }),
                         ];
                       }
                       case "input_json_delta": {
@@ -227,7 +229,7 @@ export const make = (): Effect.Effect<
                     switch (block.type) {
                       case "text": {
                         return [
-                          StreamEvent.Message({
+                          StreamEventEnum.Message({
                             message: new AssistantMessage({
                               content: block.text,
                             }),
@@ -236,7 +238,7 @@ export const make = (): Effect.Effect<
                       }
                       case "toolUse": {
                         return [
-                          StreamEvent.FunctionCall({
+                          StreamEventEnum.FunctionCall({
                             id: block.toolUse.id,
                             name: block.toolUse.name,
                             arguments: block.toolUse.input,

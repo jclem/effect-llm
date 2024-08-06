@@ -141,7 +141,7 @@ export type StreamEvent = Data.TaggedEnum<{
     readonly arguments: string;
   };
 }>;
-export const StreamEvent = Data.taggedEnum<StreamEvent>();
+export const StreamEventEnum = Data.taggedEnum<StreamEvent>();
 
 /**
  * An interface which provides the low-level stream from some LLM provider.
@@ -187,7 +187,7 @@ interface FunctionResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
 /**
  * The result of a function call.
  */
-export const FunctionResult = Data.taggedEnum<FunctionResultDefinition>();
+export const FunctionResultEnum = Data.taggedEnum<FunctionResultDefinition>();
 
 /**
  * An error that occurs when a function call is invalid.
@@ -337,7 +337,7 @@ export function streamTools<FnDefns extends Readonly<FunctionDefinitionAny[]>>(
         ) =>
           Effect.gen(function* () {
             yield* single(
-              StreamEvent.InvalidFunctionCall({
+              StreamEventEnum.InvalidFunctionCall({
                 id: error.functionCall.id,
                 name: error.functionCall.name,
                 arguments: error.functionCall.arguments,
@@ -402,7 +402,7 @@ export function streamTools<FnDefns extends Readonly<FunctionDefinitionAny[]>>(
 
             if (Either.isRight(output)) {
               yield* single(
-                FunctionResult.FunctionResultSuccess({
+                FunctionResultEnum.FunctionResultSuccess({
                   id: fnCall.id,
                   name: fnCall.name,
                   result: output.right as unknown,
@@ -417,7 +417,7 @@ export function streamTools<FnDefns extends Readonly<FunctionDefinitionAny[]>>(
               );
             } else if (Either.isLeft(output)) {
               yield* single(
-                FunctionResult.FunctionResultError({
+                FunctionResultEnum.FunctionResultError({
                   id: fnCall.id,
                   name: fnCall.name,
                   result: output.left.payload as unknown,

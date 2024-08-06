@@ -1,9 +1,9 @@
 import { HttpClient, HttpClientRequest } from "@effect/platform";
 import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
-import type { FunctionDefinitionAny } from "../generation.js";
+import type { FunctionDefinitionAny, StreamEvent } from "../generation.js";
 import {
-  StreamEvent,
+  StreamEventEnum,
   type Provider,
   type StreamParams,
 } from "../generation.js";
@@ -108,7 +108,7 @@ export const make = (): Effect.Effect<
 
               if (content != null) {
                 partialMessage += content;
-                events.push(StreamEvent.Content({ content }));
+                events.push(StreamEventEnum.Content({ content }));
               }
 
               if (toolCall != null) {
@@ -126,7 +126,7 @@ export const make = (): Effect.Effect<
               if (choice.finish_reason != null || toolCall != null) {
                 if (partialMessage.length > 0) {
                   events.push(
-                    StreamEvent.Message({
+                    StreamEventEnum.Message({
                       message: new AssistantMessage({
                         content: partialMessage,
                       }),
@@ -139,7 +139,7 @@ export const make = (): Effect.Effect<
               if (choice.finish_reason != null) {
                 for (const tool of partialToolCalls.values()) {
                   events.push(
-                    StreamEvent.FunctionCall({
+                    StreamEventEnum.FunctionCall({
                       id: tool.id,
                       name: tool.name,
                       arguments: tool.arguments,
