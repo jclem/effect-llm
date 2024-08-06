@@ -65,6 +65,13 @@ export class FunctionError<E> extends Data.TaggedError("FunctionError")<{
 export const functionError = <P>(payload: P) =>
   Effect.fail(new FunctionError({ payload }));
 
+class HaltToolLoopError extends Data.TaggedError("HaltToolLoopError") {}
+
+/**
+ * Halt the tool loop immediately after the current tool call.
+ */
+export const haltToolLoop = () => Effect.fail(new HaltToolLoopError());
+
 /**
  * A function definition that can be used in a stream generation call.
  */
@@ -80,7 +87,10 @@ export interface FunctionDefinition<
   readonly name: Name;
   readonly description?: string | undefined;
   readonly input: S.Schema<SA, SI, SR>;
-  readonly function: (id: string, input: SA) => Effect.Effect<A, E, R>;
+  readonly function: (
+    id: string,
+    input: SA,
+  ) => Effect.Effect<A, E | HaltToolLoopError, R>;
 }
 
 /**
@@ -477,7 +487,9 @@ export const streamTools: {
                 ),
                 Effect.catchAll((error: unknown) =>
                   Effect.fail(
-                    new FunctionExecutionError({ id: fnCall.id, error }),
+                    error instanceof HaltToolLoopError
+                      ? error
+                      : new FunctionExecutionError({ id: fnCall.id, error }),
                   ),
                 ),
               );
@@ -499,7 +511,7 @@ export const streamTools: {
                     result: output.right as unknown,
                   }),
                 );
-              } else if (Either.isLeft(output)) {
+              } else {
                 yield* single(
                   FunctionResultEnum.FunctionResultError({
                     id: fnCall.id,
@@ -548,6 +560,7 @@ export const streamTools: {
               (error) => onInvalidFunctionCall(error),
             ),
             Effect.andThen(() => handleFunctionCalls),
+            Effect.catchTag("HaltToolLoopError", () => end()),
             Effect.catchAll((error) => fail(error)),
             Effect.catchAllDefect((defect) =>
               fail(new UnknownException(defect)),
