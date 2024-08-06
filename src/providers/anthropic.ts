@@ -4,6 +4,7 @@ import type { HttpClientError } from "@effect/platform/HttpClientError";
 import { JSONSchema, Schema as S } from "@effect/schema";
 import {
   Array,
+  Data,
   Effect,
   Match,
   Option,
@@ -11,8 +12,12 @@ import {
   Stream,
   type Scope,
 } from "effect";
-import type { UnknownException } from "effect/Cause";
-import type { FunctionDefinitionAny, StreamEvent } from "../generation.js";
+import { UnknownException } from "effect/Cause";
+import type {
+  FunctionCallOption,
+  FunctionDefinitionAny,
+  StreamEvent,
+} from "../generation.js";
 import {
   StreamEventEnum,
   type Provider,
@@ -113,144 +118,163 @@ export const make = (): Effect.Effect<
       stream<F extends Readonly<FunctionDefinitionAny[]>>(
         params: StreamParams<F>,
       ) {
-        return HttpClientRequest.post("/v1/messages").pipe(
-          HttpClientRequest.setHeader(
-            "X-API-Key",
-            Redacted.value(params.apiKey),
-          ),
-          HttpClientRequest.jsonBody({
-            // TODO: Handle system messages
-            model: params.model,
-            system: params.system,
-            messages: messagesFromEvents(params.events),
-            max_tokens: params.maxTokens,
-            stream: true,
-            tools: params.functions ? gatherTools(params.functions) : undefined,
-          }),
-          Effect.flatMap(client),
-          Effect.flatMap(streamSSE),
-          Stream.unwrap,
-          filterParsedEvents,
-          Stream.filterMap((e) => decodeContentBlockEvent(e.data)),
-          (stream) => {
-            // TODO: Why does the tool use content block start have an input object?
-            // TODO: Is the initial text on a text content block start also ever non-empty?
-            type TextBlock = { type: "text"; index: number; text: string };
-            type ToolBlock = {
-              type: "toolUse";
-              index: number;
-              toolUse: { id: string; name: string; input: string };
-            };
+        return Effect.gen(function* () {
+          const toolChoice = params.functionCall
+            ? yield* getToolChoice(params.functionCall)
+            : undefined;
 
-            type Block = TextBlock | ToolBlock;
+          return HttpClientRequest.post("/v1/messages").pipe(
+            HttpClientRequest.setHeader(
+              "X-API-Key",
+              Redacted.value(params.apiKey),
+            ),
+            HttpClientRequest.jsonBody({
+              // TODO: Handle system messages
+              model: params.model,
+              system: params.system,
+              messages: messagesFromEvents(params.events),
+              max_tokens: params.maxTokens,
+              stream: true,
+              tools: params.functions
+                ? gatherTools(params.functions)
+                : undefined,
+              tool_choice: toolChoice,
+            }),
+            Effect.flatMap(client),
+            Effect.flatMap(streamSSE),
+            Stream.unwrap,
+            filterParsedEvents,
+            Stream.filterMap((e) => decodeContentBlockEvent(e.data)),
+            (stream) => {
+              // TODO: Why does the tool use content block start have an input object?
+              // TODO: Is the initial text on a text content block start also ever non-empty?
+              type TextBlock = { type: "text"; index: number; text: string };
+              type ToolBlock = {
+                type: "toolUse";
+                index: number;
+                toolUse: { id: string; name: string; input: string };
+              };
 
-            const blocks: Block[] = [];
+              type Block = TextBlock | ToolBlock;
 
-            return Stream.mapConcat<
-              ContentBlockEvent,
-              HttpClientError | HttpBodyError | UnknownException,
-              Scope.Scope,
-              StreamEvent
-            >(
-              stream,
-              Match.type<ContentBlockEvent>().pipe(
-                Match.discriminatorsExhaustive("type")({
-                  content_block_start: (event) => {
-                    switch (event.content_block.type) {
-                      case "text":
-                        blocks.push({
-                          type: "text",
-                          index: event.index,
-                          text: "",
-                        });
-                        return [StreamEventEnum.ContentStart({ content: "" })];
-                      case "tool_use":
-                        blocks.push({
-                          type: "toolUse",
-                          index: event.index,
-                          toolUse: {
-                            id: event.content_block.id,
-                            name: event.content_block.name,
-                            input: "",
-                          },
-                        });
-                        return [
-                          StreamEventEnum.FunctionCallStart({
-                            id: event.content_block.id,
-                            name: event.content_block.name,
-                          }),
-                        ];
-                    }
-                  },
-                  content_block_delta: (event) => {
-                    switch (event.delta.type) {
-                      case "text_delta": {
-                        const block = Array.findFirst(
-                          blocks,
-                          (s): s is TextBlock =>
-                            s.index === event.index && s.type === "text",
-                        ).pipe(
-                          Option.getOrThrowWith(
-                            () => new Error("No text block found"),
-                          ),
-                        );
+              const blocks: Block[] = [];
 
-                        block.text += event.delta.text;
-
-                        return [
-                          StreamEventEnum.Content({
-                            content: event.delta.text,
-                          }),
-                        ];
-                      }
-                      case "input_json_delta": {
-                        const block = Array.findFirst(
-                          blocks,
-                          (s): s is ToolBlock =>
-                            s.index === event.index && s.type === "toolUse",
-                        ).pipe(
-                          Option.getOrThrowWith(
-                            () => new Error("No tool use block found"),
-                          ),
-                        );
-
-                        block.toolUse.input += event.delta.partial_json;
-
-                        return [];
-                      }
-                    }
-                  },
-                  content_block_stop: (event) => {
-                    const block = blocks.find((b) => b.index === event.index);
-                    if (!block) {
-                      throw new Error("No content block found");
-                    }
-
-                    switch (block.type) {
-                      case "text": {
-                        return [
-                          StreamEventEnum.Message({
-                            message: new AssistantMessage({
-                              content: block.text,
+              return Stream.mapConcat<
+                ContentBlockEvent,
+                HttpClientError | HttpBodyError | UnknownException,
+                Scope.Scope,
+                StreamEvent
+              >(
+                stream,
+                Match.type<ContentBlockEvent>().pipe(
+                  Match.discriminatorsExhaustive("type")({
+                    content_block_start: (event) => {
+                      switch (event.content_block.type) {
+                        case "text":
+                          blocks.push({
+                            type: "text",
+                            index: event.index,
+                            text: "",
+                          });
+                          return [
+                            StreamEventEnum.ContentStart({ content: "" }),
+                          ];
+                        case "tool_use":
+                          blocks.push({
+                            type: "toolUse",
+                            index: event.index,
+                            toolUse: {
+                              id: event.content_block.id,
+                              name: event.content_block.name,
+                              input: "",
+                            },
+                          });
+                          return [
+                            StreamEventEnum.FunctionCallStart({
+                              id: event.content_block.id,
+                              name: event.content_block.name,
                             }),
-                          }),
-                        ];
+                          ];
                       }
-                      case "toolUse": {
-                        return [
-                          StreamEventEnum.FunctionCall({
-                            id: block.toolUse.id,
-                            name: block.toolUse.name,
-                            arguments: block.toolUse.input,
-                          }),
-                        ];
+                    },
+                    content_block_delta: (event) => {
+                      switch (event.delta.type) {
+                        case "text_delta": {
+                          const block = Array.findFirst(
+                            blocks,
+                            (s): s is TextBlock =>
+                              s.index === event.index && s.type === "text",
+                          ).pipe(
+                            Option.getOrThrowWith(
+                              () => new Error("No text block found"),
+                            ),
+                          );
+
+                          block.text += event.delta.text;
+
+                          return [
+                            StreamEventEnum.Content({
+                              content: event.delta.text,
+                            }),
+                          ];
+                        }
+                        case "input_json_delta": {
+                          const block = Array.findFirst(
+                            blocks,
+                            (s): s is ToolBlock =>
+                              s.index === event.index && s.type === "toolUse",
+                          ).pipe(
+                            Option.getOrThrowWith(
+                              () => new Error("No tool use block found"),
+                            ),
+                          );
+
+                          block.toolUse.input += event.delta.partial_json;
+
+                          return [];
+                        }
                       }
-                    }
-                  },
-                }),
-              ),
-            );
-          },
+                    },
+                    content_block_stop: (event) => {
+                      const block = blocks.find((b) => b.index === event.index);
+                      if (!block) {
+                        throw new Error("No content block found");
+                      }
+
+                      switch (block.type) {
+                        case "text": {
+                          return [
+                            StreamEventEnum.Message({
+                              message: new AssistantMessage({
+                                content: block.text,
+                              }),
+                            }),
+                          ];
+                        }
+                        case "toolUse": {
+                          return [
+                            StreamEventEnum.FunctionCall({
+                              id: block.toolUse.id,
+                              name: block.toolUse.name,
+                              arguments: block.toolUse.input,
+                            }),
+                          ];
+                        }
+                      }
+                    },
+                  }),
+                ),
+              );
+            },
+          );
+        }).pipe(
+          Effect.mapError((err) =>
+            err instanceof InvalidFunctionCallOptionError
+              ? new UnknownException(err)
+              : err,
+          ),
+          Stream.unwrap,
+          (x) => x,
         );
       },
     };
@@ -397,3 +421,36 @@ const gatherTools = (tools: Readonly<FunctionDefinitionAny[]>) =>
     description: tool.description,
     input_schema: JSONSchema.make(tool.input),
   }));
+
+class InvalidFunctionCallOptionError extends Data.TaggedError(
+  "InvalidFunctionCallOptionError",
+)<{
+  readonly option: unknown;
+  readonly reason: string;
+}> {}
+
+const getToolChoice = (
+  toolCall: FunctionCallOption<Readonly<FunctionDefinitionAny[]>>,
+) =>
+  Effect.gen(function* () {
+    if (typeof toolCall === "object" && "name" in toolCall) {
+      return {
+        type: "tool",
+        name: toolCall.name,
+      };
+    }
+
+    switch (toolCall) {
+      case "auto":
+        return { type: "auto " };
+      case "any":
+        return { type: "any" };
+      default:
+        return yield* Effect.fail(
+          new InvalidFunctionCallOptionError({
+            option: toolCall,
+            reason: "Not supported.",
+          }),
+        );
+    }
+  });

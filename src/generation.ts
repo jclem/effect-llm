@@ -39,7 +39,12 @@ export interface StreamParams<
   readonly maxIterations?: number | undefined;
   readonly maxTokens?: number | undefined;
   readonly functions?: FnDefns | undefined;
+  readonly functionCall?: FunctionCallOption<FnDefns>;
 }
+
+export type FunctionCallOption<
+  FnDefns extends Readonly<FunctionDefinitionAny[]>,
+> = "auto" | "any" | { name: FnDefns[number]["name"] } | "none";
 
 /**
  * An error reported back to the agent as an error during function execution.

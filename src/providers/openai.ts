@@ -1,7 +1,11 @@
 import { HttpClient, HttpClientRequest } from "@effect/platform";
 import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
-import type { FunctionDefinitionAny, StreamEvent } from "../generation.js";
+import type {
+  FunctionCallOption,
+  FunctionDefinitionAny,
+  StreamEvent,
+} from "../generation.js";
 import {
   StreamEventEnum,
   type Provider,
@@ -85,6 +89,9 @@ export const make = (): Effect.Effect<
             max_tokens: params.maxTokens,
             stream: true,
             tools: params.functions ? gatherTools(params.functions) : undefined,
+            tool_choice: params.functionCall
+              ? getToolChoice(params.functionCall)
+              : undefined,
           }),
           Effect.flatMap(client),
           Effect.flatMap(streamSSE),
@@ -165,6 +172,28 @@ const gatherTools = (tools: Readonly<FunctionDefinitionAny[]>) =>
       parameters: JSONSchema.make(tool.input),
     },
   }));
+
+const getToolChoice = (
+  toolCall: FunctionCallOption<Readonly<FunctionDefinitionAny[]>>,
+) => {
+  if (typeof toolCall === "object" && "name" in toolCall) {
+    return {
+      type: "function",
+      function: {
+        name: toolCall.name,
+      },
+    };
+  }
+
+  switch (toolCall) {
+    case "auto":
+      return "auto";
+    case "any":
+      return "required";
+    case "none":
+      return "none";
+  }
+};
 
 const messagesFromEvents = Array.filterMap(
   Match.type<ThreadEvent>().pipe(
