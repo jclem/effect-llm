@@ -236,7 +236,7 @@ export const stream: {
   ): (
     provider: Provider,
   ) => Stream.Stream<
-    StreamEvent | FunctionResult<unknown, unknown>,
+    StreamEvent,
     | ParseError
     | HttpClientError
     | HttpBodyError
@@ -262,6 +262,11 @@ export const stream: {
 );
 
 /**
+ * An event emitted during a stream using tool calls.
+ */
+export type StreamToolsEvent = StreamEvent | FunctionResult<unknown, unknown>;
+
+/**
  * Generate a stream of events from the LLM provider, invoking the defined
  * functions as needed and returning the results to the LLM.
  *
@@ -278,7 +283,7 @@ export const streamTools: {
   ): (
     provider: Provider,
   ) => Stream.Stream<
-    StreamEvent | FunctionResult<unknown, unknown>,
+    StreamToolsEvent,
     | ParseError
     | HttpClientError
     | HttpBodyError
@@ -291,7 +296,7 @@ export const streamTools: {
     provider: Provider,
     params: StreamParams<FnDefns>,
   ): Stream.Stream<
-    StreamEvent | FunctionResult<unknown, unknown>,
+    StreamToolsEvent,
     | ParseError
     | HttpClientError
     | HttpBodyError
@@ -307,7 +312,7 @@ export const streamTools: {
     params: StreamParams<FnDefns>,
   ) => {
     return Stream.asyncEffect<
-      StreamEvent | FunctionResult<unknown, unknown>,
+      StreamToolsEvent,
       | ParseError
       | HttpClientError
       | HttpBodyError
@@ -323,9 +328,8 @@ export const streamTools: {
             return;
           }
 
-          const single = (
-            event: StreamEvent | FunctionResult<unknown, unknown>,
-          ) => Effect.promise(() => emit.single(event));
+          const single = (event: StreamToolsEvent) =>
+            Effect.promise(() => emit.single(event));
 
           const end = () => Effect.promise(() => emit.end());
 
