@@ -271,6 +271,10 @@ export const stream: {
  */
 export type StreamToolsEvent = StreamEvent | FunctionResult<unknown, unknown>;
 
+export class MaxIterationsError extends Data.TaggedError(
+  "MaxIterationsError",
+) {}
+
 /**
  * Generate a stream of events from the LLM provider, invoking the defined
  * functions as needed and returning the results to the LLM.
@@ -289,6 +293,7 @@ export const streamTools: {
     provider: Provider,
   ) => Stream.Stream<
     StreamToolsEvent,
+    | MaxIterationsError
     | ParseError
     | HttpClientError
     | HttpBodyError
@@ -302,6 +307,7 @@ export const streamTools: {
     params: StreamParams<FnDefns>,
   ): Stream.Stream<
     StreamToolsEvent,
+    | MaxIterationsError
     | ParseError
     | HttpClientError
     | HttpBodyError
@@ -318,6 +324,7 @@ export const streamTools: {
   ) => {
     return Stream.asyncEffect<
       StreamToolsEvent,
+      | MaxIterationsError
       | ParseError
       | HttpClientError
       | HttpBodyError
@@ -329,8 +336,7 @@ export const streamTools: {
       (emit) =>
         Effect.gen(function* () {
           if (params.maxIterations === 0) {
-            yield* Effect.log("Max iterations reached");
-            return;
+            return yield* Effect.fail(new MaxIterationsError());
           }
 
           const single = (event: StreamToolsEvent) =>
@@ -340,6 +346,7 @@ export const streamTools: {
 
           const fail = (
             error:
+              | MaxIterationsError
               | ParseError
               | HttpClientError
               | HttpBodyError
@@ -514,21 +521,6 @@ export const streamTools: {
               return;
             }
 
-            const hasError = newEvents.some(
-              (event) => event instanceof ToolResultErrorEvent,
-            );
-
-            const canOnlyUseTools =
-              params.functionCall != null &&
-              (params.functionCall === "required" ||
-                typeof params.functionCall === "object");
-
-            // If there are no errors and we'll only ever emit function calls,
-            // prevent an infinite loop.
-            if (!hasError && canOnlyUseTools) {
-              return;
-            }
-
             const newParams = {
               ...params,
               events: [...params.events, ...newEvents],
@@ -565,6 +557,7 @@ export const streamTools: {
           );
         }) as Effect.Effect<
           void,
+          | MaxIterationsError
           | ParseError
           | HttpClientError
           | HttpBodyError
