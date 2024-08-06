@@ -44,7 +44,7 @@ export interface StreamParams<
 
 export type FunctionCallOption<
   FnDefns extends Readonly<FunctionDefinitionAny[]>,
-> = "auto" | "any" | { name: FnDefns[number]["name"] } | "none";
+> = "auto" | "required" | { name: FnDefns[number]["name"] } | "none";
 
 /**
  * An error reported back to the agent as an error during function execution.
@@ -443,7 +443,15 @@ export const streamTools: {
               return yield* end();
             }
 
-            const newEvents: ThreadEvent[] = [];
+            const newEvents: Extract<
+              ThreadEvent,
+              {
+                _tag:
+                  | "ToolUseEvent"
+                  | "ToolResultSuccessEvent"
+                  | "ToolResultErrorEvent";
+              }
+            >[] = [];
 
             for (const fnCall of fnCalls) {
               const toolCallEvent = new ToolUseEvent({
@@ -503,6 +511,21 @@ export const streamTools: {
             }
 
             if (newEvents.length === 0) {
+              return;
+            }
+
+            const hasError = newEvents.some(
+              (event) => event instanceof ToolResultErrorEvent,
+            );
+
+            const canOnlyUseTools =
+              params.functionCall != null &&
+              (params.functionCall === "required" ||
+                typeof params.functionCall === "object");
+
+            // If there are no errors and we'll only ever emit function calls,
+            // prevent an infinite loop.
+            if (!hasError && canOnlyUseTools) {
               return;
             }
 

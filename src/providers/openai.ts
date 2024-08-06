@@ -188,7 +188,7 @@ const getToolChoice = (
   switch (toolCall) {
     case "auto":
       return "auto";
-    case "any":
+    case "required":
       return "required";
     case "none":
       return "none";

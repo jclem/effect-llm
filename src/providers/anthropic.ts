@@ -443,7 +443,7 @@ const getToolChoice = (
     switch (toolCall) {
       case "auto":
         return { type: "auto " };
-      case "any":
+      case "required":
         return { type: "any" };
       default:
         return yield* Effect.fail(
