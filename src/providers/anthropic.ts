@@ -131,6 +131,7 @@ export const make = (): Effect.Effect<
             HttpClientRequest.jsonBody({
               // TODO: Handle system messages
               model: params.model,
+              temperature: params.temperature,
               system: params.system,
               messages: messagesFromEvents(params.events),
               max_tokens: params.maxTokens,

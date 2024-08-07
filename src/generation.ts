@@ -34,6 +34,7 @@ export interface StreamParams<
 > {
   readonly apiKey: Redacted.Redacted;
   readonly model: string;
+  readonly temperature?: number | undefined;
   readonly system?: string | undefined;
   readonly events: readonly ThreadEvent[];
   readonly maxIterations?: number | undefined;

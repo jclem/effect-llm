@@ -71,7 +71,10 @@ const ChatCompletion = S.Struct({
 type ChatCompletion = typeof ChatCompletion.Type;
 
 export interface StructuredParams<A, I, R>
-  extends Pick<StreamParams<[]>, "apiKey" | "model" | "events" | "maxTokens"> {
+  extends Pick<
+    StreamParams<[]>,
+    "apiKey" | "model" | "temperature" | "events" | "maxTokens"
+  > {
   readonly name: string;
   readonly schema: S.Schema<A, I, R>;
   readonly strict?: boolean | undefined;
@@ -108,6 +111,7 @@ export const make = () =>
           ),
           HttpClientRequest.jsonBody({
             model: params.model,
+            temperature: params.temperature,
             messages: messagesFromEvents(params.events),
             max_tokens: params.maxTokens,
             response_format: {
@@ -147,6 +151,7 @@ export const make = () =>
           ),
           HttpClientRequest.jsonBody({
             model: params.model,
+            temperature: params.temperature,
             messages: messagesFromEvents(params.events),
             max_tokens: params.maxTokens,
             stream: true,
