@@ -34,13 +34,13 @@ export interface StreamParams<
 > {
   readonly apiKey: Redacted.Redacted;
   readonly model: string;
-  readonly temperature?: number | undefined;
   readonly system?: string | undefined;
   readonly events: readonly ThreadEvent[];
   readonly maxIterations?: number | undefined;
   readonly maxTokens?: number | undefined;
   readonly functions?: FnDefns | undefined;
   readonly functionCall?: FunctionCallOption<FnDefns>;
+  readonly additionalParameters?: Record<string, unknown> | undefined;
 }
 
 export type FunctionCallOption<

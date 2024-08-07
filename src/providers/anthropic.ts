@@ -131,7 +131,6 @@ export const make = (): Effect.Effect<
             HttpClientRequest.jsonBody({
               // TODO: Handle system messages
               model: params.model,
-              temperature: params.temperature,
               system: params.system,
               messages: messagesFromEvents(params.events),
               max_tokens: params.maxTokens,
@@ -140,6 +139,7 @@ export const make = (): Effect.Effect<
                 ? gatherTools(params.functions)
                 : undefined,
               tool_choice: toolChoice,
+              ...params.additionalParameters,
             }),
             Effect.flatMap(client),
             Effect.flatMap(streamSSE),

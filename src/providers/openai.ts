@@ -73,7 +73,7 @@ type ChatCompletion = typeof ChatCompletion.Type;
 export interface StructuredParams<A, I, R>
   extends Pick<
     StreamParams<[]>,
-    "apiKey" | "model" | "temperature" | "events" | "maxTokens"
+    "apiKey" | "model" | "events" | "maxTokens" | "additionalParameters"
   > {
   readonly name: string;
   readonly schema: S.Schema<A, I, R>;
@@ -111,7 +111,6 @@ export const make = () =>
           ),
           HttpClientRequest.jsonBody({
             model: params.model,
-            temperature: params.temperature,
             messages: messagesFromEvents(params.events),
             max_tokens: params.maxTokens,
             response_format: {
@@ -122,6 +121,7 @@ export const make = () =>
                 schema: JSONSchema.make(params.schema),
               },
             },
+            ...params.additionalParameters,
           }),
           Effect.flatMap(client),
           Effect.flatMap(HttpClientResponse.schemaBodyJson(ChatCompletion)),
@@ -151,7 +151,6 @@ export const make = () =>
           ),
           HttpClientRequest.jsonBody({
             model: params.model,
-            temperature: params.temperature,
             messages: messagesFromEvents(params.events),
             max_tokens: params.maxTokens,
             stream: true,
@@ -159,6 +158,7 @@ export const make = () =>
             tool_choice: params.functionCall
               ? getToolChoice(params.functionCall)
               : undefined,
+            ...params.additionalParameters,
           }),
           Effect.flatMap(client),
           Effect.flatMap(streamSSE),
