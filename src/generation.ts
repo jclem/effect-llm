@@ -310,7 +310,7 @@ export const streamTools: {
     | UnknownException
     | FunctionExecutionError<unknown>
     | FunctionDefinitionError<FnDefns[number]>,
-    Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+    Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
   >;
   <FnDefns extends Readonly<FunctionDefinitionAny[]>>(
     provider: Provider,
@@ -324,7 +324,7 @@ export const streamTools: {
     | UnknownException
     | FunctionExecutionError<unknown>
     | FunctionDefinitionError<FnDefns[number]>,
-    Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+    Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
   >;
 } = dual(
   2,
@@ -341,7 +341,7 @@ export const streamTools: {
       | UnknownException
       | FunctionExecutionError<unknown>
       | FunctionDefinitionError<FnDefns[number]>,
-      Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+      Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
     >(
       (emit) =>
         Effect.gen(function* () {
@@ -577,7 +577,7 @@ export const streamTools: {
           | UnknownException
           | FunctionExecutionError<unknown>
           | FunctionDefinitionError<FnDefns[number]>,
-          Generation | Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+          Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
         >,
     );
   },

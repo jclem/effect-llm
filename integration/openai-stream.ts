@@ -1,38 +1,47 @@
 import { HttpClient } from "@effect/platform";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
-import { Schema } from "@effect/schema";
-import { Config, Effect, Layer, Stream } from "effect";
-import { Generation, defineFunction, streamTools } from "../src/generate";
-import * as OpenAI from "../src/providers/openai";
-import { UserMessage } from "../src/thread";
+import { Schema as S } from "@effect/schema";
+import { Config, Console, Effect, Layer, Stream } from "effect";
+import { Generation, Thread } from "../src";
+import { OpenAI } from "../src/providers";
 
-const openAIProvider = Config.redacted("OPENAI_API_KEY").pipe(
-  Effect.flatMap((apiKey) => OpenAI.make({ apiKey })),
-);
+Effect.gen(function* () {
+  const llm = yield* Generation.Generation;
+  const apiKey = yield* Config.redacted("OPENAI_API_KEY");
 
-streamTools({
-  model: OpenAI.Model.GPT4o,
-  events: [
-    new UserMessage({
-      content:
-        'Say hello with TEXT only (not a function), and then use a function to say "Greetings".',
-    }),
-  ],
-  functions: [
-    defineFunction("sayHello", {
-      description: "Say hello to the user",
-      input: Schema.Struct({ greeting: Schema.String }),
-      function: (input) =>
-        Effect.sync(() => {
-          console.log("GREETING:", input.greeting);
-          return { ok: true };
+  yield* Generation.streamTools(llm, {
+    apiKey,
+    model: OpenAI.Model.GPT4o20240806,
+    maxTokens: 256,
+    events: [
+      new Thread.UserMessage({
+        content:
+          "Say hello with TEXT only (not a function), and then use a function to say 'Greetings'",
+      }),
+    ],
+    functions: [
+      Generation.defineFunction("sayHello", {
+        description: "Say hello to the user",
+        input: S.Struct({
+          greeting: S.String,
         }),
-    }),
-  ],
+        function: (_, input) =>
+          Effect.gen(function* () {
+            yield* Console.log("GREETING:", input.greeting);
+            return { ok: true };
+          }),
+      }),
+    ],
+  }).pipe(
+    Stream.runForEach(Effect.logInfo),
+    Effect.catchTag("ResponseError", (err) =>
+      err.response.json.pipe(Effect.flatMap(Effect.logError)),
+    ),
+    Effect.catchAll(Effect.logError),
+    Effect.scoped,
+  );
 }).pipe(
-  Stream.runForEach(Effect.logInfo),
-  Effect.scoped,
-  Effect.provide(Layer.effect(Generation, openAIProvider)),
+  Effect.provide(Layer.effect(Generation.Generation, OpenAI.make())),
   Effect.provide(BunContext.layer),
   Effect.provide(HttpClient.layer),
   BunRuntime.runMain,

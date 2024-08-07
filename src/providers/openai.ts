@@ -1,62 +1,87 @@
-import { HttpClient, HttpClientRequest } from "@effect/platform";
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+} from "@effect/platform";
 import { JSONSchema, Schema as S } from "@effect/schema";
-import { Array, Effect, Match, Option, Redacted, Stream } from "effect";
+import { Array, Data, Effect, Match, Option, Redacted, Stream } from "effect";
 import type {
   FunctionCallOption,
   FunctionDefinitionAny,
   StreamEvent,
 } from "../generation.js";
-import {
-  StreamEventEnum,
-  type Provider,
-  type StreamParams,
-} from "../generation.js";
+import { StreamEventEnum, type StreamParams } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
 
 export enum Model {
   GPT4Turbo = "gpt-4-turbo",
   GPT4o = "gpt-4o",
+  GPT4o20240806 = "gpt-4o-2024-08-06",
   GPT4oMini = "gpt-4o-mini",
 }
 
-const ChatCompletionChunk = S.parseJson(
-  S.Struct({
-    object: S.Literal("chat.completion.chunk"),
-    choices: S.NonEmptyArray(
+const ChatCompletionMessage = S.Struct({
+  role: S.optional(S.NullOr(S.Literal("assistant"))),
+  content: S.optional(S.NullOr(S.String)),
+  refusal: S.optional(S.NullOr(S.String)),
+  tool_calls: S.optional(
+    S.Array(
       S.Struct({
-        delta: S.Struct({
-          role: S.optional(S.NullOr(S.Literal("assistant"))),
-          content: S.optional(S.NullOr(S.String)),
-          tool_calls: S.optional(
-            S.Array(
-              S.Struct({
-                id: S.optional(S.String),
-                type: S.optional(S.Literal("function")),
-                index: S.Int,
-                function: S.Struct({
-                  name: S.optional(S.String),
-                  arguments: S.String,
-                }),
-              }),
-            ),
-          ),
+        id: S.optional(S.String),
+        type: S.optional(S.Literal("function")),
+        index: S.Int,
+        function: S.Struct({
+          name: S.optional(S.String),
+          arguments: S.String,
         }),
-        finish_reason: S.NullOr(S.Literal("stop", "tool_calls")),
       }),
     ),
-  }),
-);
+  ),
+});
+
+const ChatCompletionFinishReason = S.Literal("stop", "tool_calls");
+
+const ChatCompletionChunk = S.Struct({
+  object: S.Literal("chat.completion.chunk"),
+  choices: S.NonEmptyArray(
+    S.Struct({
+      delta: ChatCompletionMessage,
+      finish_reason: S.NullOr(ChatCompletionFinishReason),
+    }),
+  ),
+});
 
 type ChatCompletionChunk = typeof ChatCompletionChunk.Type;
 
-const decodeChatCompletionChunk = S.decodeUnknownOption(ChatCompletionChunk);
+const decodeChatCompletionChunk = S.decodeUnknownOption(
+  S.parseJson(ChatCompletionChunk),
+);
 
-export const make = (): Effect.Effect<
-  Provider,
-  never,
-  HttpClient.HttpClient.Default
-> =>
+const ChatCompletion = S.Struct({
+  object: S.Literal("chat.completion"),
+  choices: S.NonEmptyArray(
+    S.Struct({
+      message: ChatCompletionMessage,
+      finish_reason: S.NullOr(ChatCompletionFinishReason),
+    }),
+  ),
+});
+
+type ChatCompletion = typeof ChatCompletion.Type;
+
+export interface StructuredParams<A, I, R>
+  extends Pick<StreamParams<[]>, "apiKey" | "model" | "events" | "maxTokens"> {
+  readonly name: string;
+  readonly schema: S.Schema<A, I, R>;
+  readonly strict?: boolean | undefined;
+}
+
+export class RefusalError extends Data.TaggedError("RefusalError")<{
+  readonly refusal: string;
+}> {}
+
+export const make = () =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
       Effect.map(HttpClient.filterStatusOk),
@@ -75,6 +100,43 @@ export const make = (): Effect.Effect<
     );
 
     return {
+      structured<A, I, R>(params: StructuredParams<A, I, R>) {
+        return HttpClientRequest.post("/v1/chat/completions").pipe(
+          HttpClientRequest.setHeader(
+            "Authorization",
+            `Bearer ${Redacted.value(params.apiKey)}`,
+          ),
+          HttpClientRequest.jsonBody({
+            model: params.model,
+            messages: messagesFromEvents(params.events),
+            max_tokens: params.maxTokens,
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: params.name,
+                strict: params.strict ?? true,
+                schema: JSONSchema.make(params.schema),
+              },
+            },
+          }),
+          Effect.flatMap(client),
+          Effect.flatMap(HttpClientResponse.schemaBodyJson(ChatCompletion)),
+          Effect.map((comp) => comp.choices[0].message),
+          Effect.flatMap((msg) =>
+            Effect.gen(function* () {
+              if (msg.refusal) {
+                return yield* Effect.fail(
+                  new RefusalError({ refusal: msg.refusal }),
+                );
+              }
+
+              return yield* Effect.fromNullable(msg.content);
+            }),
+          ),
+          Effect.flatMap(S.decodeUnknown(S.parseJson(params.schema))),
+        );
+      },
+
       stream<F extends Readonly<FunctionDefinitionAny[]>>(
         params: StreamParams<F>,
       ) {
