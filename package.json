@@ -26,7 +26,8 @@
   "scripts": {
     "check": "konk run c -cgL -n'check:*'",
     "check:prettier": "prettier --check .",
-    "check:eslint": "eslint ."
+    "check:eslint": "eslint .",
+    "check:build": "tsc --noEmit"
   },
   "exports": {
     "import": "./dist/index.mjs",
@@ -34,21 +35,21 @@
     "types": "./dist/index.d.ts"
   },
   "dependencies": {
-    "@effect/platform": "^0.61.4",
-    "@effect/schema": "^0.70.2",
+    "@effect/platform": "^0.62.0",
+    "@effect/schema": "^0.71.0",
     "@jclem/assert": "^3.1.0",
-    "effect": "^3.6.1",
-    "eventsource-parser": "^1.1.2"
+    "effect": "^3.6.4",
+    "eventsource-parser": "^2.0.1"
   },
   "devDependencies": {
-    "@effect/platform-bun": "^0.41.4",
-    "@eslint/js": "^9.8.0",
+    "@effect/platform-bun": "^0.42.0",
+    "@eslint/js": "^9.9.0",
     "@types/bun": "^1.1.6",
-    "eslint": "9.x",
+    "eslint": "^9.9.0",
     "globals": "^15.9.0",
-    "konk": "^0.29.2",
+    "konk": "^0.29.9",
     "prettier": "^3.3.3",
-    "typescript-eslint": "^8.0.1",
+    "typescript-eslint": "^8.1.0",
     "unbuild": "^2.0.0"
   },
   "peerDependencies": {
