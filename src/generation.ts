@@ -65,7 +65,10 @@ export type ToolCallOption<FnDefns extends Readonly<ToolDefinitionAny[]>> =
   | { name: FnDefns[number]["name"] }
   | "none";
 
-class ToolError<E> extends Data.TaggedError("ToolError")<{
+/**
+ * An error that occurs when a tool fails to execute, reported to the model.
+ */
+export class ToolError<E> extends Data.TaggedError("ToolError")<{
   readonly payload: E;
 }> {}
 
