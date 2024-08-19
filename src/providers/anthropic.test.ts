@@ -9,11 +9,11 @@ import { Anthropic } from "./index.js";
 const setup = <A, E, R>(self: Effect.Effect<A, E, R>) =>
   self.pipe(Effect.scoped, Effect.provide(BunContext.layer));
 
-const responseLayer = (body: string, init?: ResponseInit) =>
+const responseLayer = (...args: ConstructorParameters<typeof Response>) =>
   Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.makeDefault((req) =>
-      Effect.succeed(HttpClientResponse.fromWeb(req, new Response(body, init))),
+      Effect.succeed(HttpClientResponse.fromWeb(req, new Response(...args))),
     ),
   );
 
