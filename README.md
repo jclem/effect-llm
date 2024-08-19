@@ -31,16 +31,7 @@ const program = Effect.gen(function* () {
     ],
   });
 
-  const responseText = yield* stream.pipe(
-    Stream.filterMap(
-      Match.type<StreamEvent>().pipe(
-        Match.tag("Content", (event) => Option.some(event.content)),
-        Match.orElse(() => Option.none()),
-      ),
-    ),
-    Stream.mkString,
-    Effect.scoped,
-  );
+  const responseText = yield* Generation.getContent(stream);
 
   yield* Console.log("The model says:", responseText);
 });
@@ -89,16 +80,7 @@ const program = Effect.gen(function* () {
     ],
   });
 
-  const responseText = yield* stream.pipe(
-    Stream.filterMap(
-      Match.type<StreamEvent>().pipe(
-        Match.tag("Content", (event) => Option.some(event.content)),
-        Match.orElse(() => Option.none()),
-      ),
-    ),
-    Stream.mkString,
-    Effect.scoped,
-  );
+  const responseText = yield* Generation.getContent(stream);
 
   yield* Console.log("The model says:", responseText);
 });

@@ -297,6 +297,35 @@ export class ToolExecutionError<R> extends Data.TaggedError(
 }> {}
 
 /**
+ * Read the text content from a completion stream.
+ *
+ * ```typescript
+ * Effect.gen(function*() {
+ *   const stream = Generation.stream(provider, params)
+ *   const content = yield* Generation.getContent(stream)
+ * })
+ * ```
+ *
+ * Since this consumes the entire stream, it is run in a scope.
+ *
+ * @param stream The stream to read text content from
+ * @returns An effect yielding the text content from the stream
+ */
+export const getContent = <E, R>(
+  stream: Stream.Stream<StreamEvent, E, R>,
+): Effect.Effect<string, E, Exclude<R, Scope.Scope>> =>
+  stream.pipe(
+    Stream.filterMap(
+      Match.type<StreamEvent>().pipe(
+        Match.tag("Content", ({ content }) => Option.some(content)),
+        Match.orElse(() => Option.none()),
+      ),
+    ),
+    Stream.mkString,
+    Effect.scoped,
+  );
+
+/**
  * Generate a stream of events from the LLM provider.
  *
  * @param provider The provider to generate the stream from
