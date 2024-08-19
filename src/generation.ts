@@ -30,35 +30,57 @@ import {
 
 /** Parameters used to configure an LLM stream generation call. */
 export interface StreamParams<FnDefns extends Readonly<ToolDefinitionAny[]>> {
+  /** A redacted API key */
   readonly apiKey: Redacted.Redacted;
+  /** The model to use for the completion request */
   readonly model: string;
+  /** A system message, serialized differently depending on the provider */
   readonly system?: string | undefined;
+  /** The events in the thread, typically messages and tool calls/results */
   readonly events: readonly ThreadEvent[];
+  /** The maximum iterations when streaming with automated tool calls */
   readonly maxIterations?: number | undefined;
+  /** The maximum number of tokens per response */
   readonly maxTokens?: number | undefined;
+  /** The tools calls the model may make */
   readonly tools?: FnDefns | undefined;
+  /** A parameter which dictates if and how the model may make tool calls */
   readonly toolCall?: ToolCallOption<FnDefns>;
+  /** Any additional parameters passed directly to the provider's API */
   readonly additionalParameters?: Record<string, unknown> | undefined;
 }
 
+/**
+ * A tool call option that dictates if and how the model may make tool calls.
+ *
+ * - "auto": The model may make any or no tool calls automatically
+ * - "required": The model must make a tool call
+ * - { name: "toolName" }: The model must make a tool call with the given name
+ * - "none": The model may not make any tool calls
+ */
 export type ToolCallOption<FnDefns extends Readonly<ToolDefinitionAny[]>> =
   | "auto"
   | "required"
   | { name: FnDefns[number]["name"] }
   | "none";
 
-/**
- * An error reported back to the agent as an error during tool execution.
- *
- * Any other error that occurs during tool execution will be a runtime error and
- * will halt the generation process.
- */
-export class ToolError<E> extends Data.TaggedError("ToolError")<{
+class ToolError<E> extends Data.TaggedError("ToolError")<{
   readonly payload: E;
 }> {}
 
 /**
  * Wrap an error in a ToolError and fail the effect with it.
+ *
+ * ```typescript
+ * defineTool("myTool", {
+ *   // etc.
+ *   effect: (_, input) => Effect.gen(function*() {
+ *     if (input === "bad") {
+ *       return yield* toolError("Input was bad");
+ *     }
+ *   })
+ * })
+ * ```
  *
  * @param payload The error to wrap in a ToolError
  * @returns A new ToolError
@@ -70,6 +92,15 @@ class HaltToolLoopError extends Data.TaggedError("HaltToolLoopError") {}
 
 /**
  * Halt the tool loop immediately after the current tool call.
+ *
+ * ```typescript
+ * defineTool("myTool", {
+ *   // etc.
+ *   effect: (_, input) => Effect.gen(function*() {
+ *     return yield* haltToolLoop();
+ *   })
+ * })
+ * ```
  */
 export const haltToolLoop = () => Effect.fail(new HaltToolLoopError());
 
@@ -124,6 +155,14 @@ type ToolDefinitionContext<F extends ToolDefinitionAny> =
 /**
  * Define a tool by providing its name, implementation, and other details.
  *
+ * ```typescript
+ * defineTool("sayHello", {
+ *   description: "A tool that says hello",
+ *   input: Schema.Struct({ name: Schema.String }),
+ *   effect: (_, { name }) => Console.log(`Hello, ${name}!`)
+ * })
+ * ```
+ *
  * @param name The name of the tool
  * @param definition The tool definition
  * @returns A new tool definition
@@ -147,21 +186,29 @@ export function defineTool<
  * An event emitted during a stream generation call.
  */
 export type StreamEvent = Data.TaggedEnum<{
+  /** Represents the start of content in a textual message */
   ContentStart: { readonly content: string };
+  /** Represents a content chunk in a textual response */
   Content: { readonly content: string };
+  /** Represents a full, completed message */
   Message: { readonly message: AssistantMessage };
+  /** Represents the start of a tool call */
   ToolCallStart: { readonly id: string; readonly name: string };
+  /** Represents a completed tool call from the model */
   ToolCall: {
     readonly id: string;
     readonly name: string;
     readonly arguments: string;
   };
+  /** Represents an invalid tool call from the model */
   InvalidToolCall: {
     readonly id: string;
     readonly name: string;
     readonly arguments: string;
   };
 }>;
+
+/** An enum of all stream events */
 export const StreamEventEnum = Data.taggedEnum<StreamEvent>();
 
 /**
@@ -189,11 +236,13 @@ export class Generation extends Context.Tag("Generation")<
  * The result of a tool call.
  */
 export type ToolResult<RS, RE> = Data.TaggedEnum<{
+  /** A successful tool call */
   ToolResultSuccess: {
     readonly id: string;
     readonly name: string;
     readonly result: RS;
   };
+  /** A tool call which errored*/
   ToolResultError: {
     readonly id: string;
     readonly name: string;
