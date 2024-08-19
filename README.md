@@ -52,6 +52,23 @@ program.pipe(
 );
 ```
 
+Note that provider `make` functions generally also receive a subset of the
+streaming params as an argument, which can be used to provide some defaults:
+
+```typescript
+Effect.gen(function* () {
+  const provider = yield* Providers.Anthropic.make({
+    apiKey: yield* Config.redacted("ANTHROPIC_API_KEY"),
+    model: Providers.Anthropic.Model.Claude35Sonnet,
+    maxTokens: 512,
+    system: "Be cordial.",
+    additionalParameters: {
+      temperature: 0.5,
+    },
+  });
+});
+```
+
 Generally, it is recommended that you set up the provider as a layer so that it
 can be swapped out with relative ease[^1].
 

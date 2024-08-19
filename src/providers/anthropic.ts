@@ -90,11 +90,19 @@ const AnthropicStreamEvent = S.Union(
 type ContentBlockEvent = typeof AnthropicStreamEvent.Type;
 const decodeContentBlockEvent = S.decodeUnknownOption(AnthropicStreamEvent);
 
-export const make = (): Effect.Effect<
-  Provider,
-  never,
-  HttpClient.HttpClient.Default
-> =>
+export const make = (
+  defaultParams: Partial<
+    Pick<
+      StreamParams<readonly ToolDefinitionAny[]>,
+      | "apiKey"
+      | "model"
+      | "maxTokens"
+      | "maxIterations"
+      | "system"
+      | "additionalParameters"
+    >
+  > = {},
+): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
       Effect.map(HttpClient.filterStatusOk),
@@ -116,6 +124,8 @@ export const make = (): Effect.Effect<
 
     return {
       stream<F extends Readonly<ToolDefinitionAny[]>>(params: StreamParams<F>) {
+        params = { ...defaultParams, ...params };
+
         return Effect.gen(function* () {
           const toolChoice = params.toolCall
             ? yield* getToolChoice(params.toolCall)
@@ -187,7 +197,7 @@ export const make = (): Effect.Effect<
                             },
                           });
                           return [
-                            StreamEventEnum.FunctionCallStart({
+                            StreamEventEnum.ToolCallStart({
                               id: event.content_block.id,
                               name: event.content_block.name,
                             }),
@@ -250,7 +260,7 @@ export const make = (): Effect.Effect<
                         }
                         case "toolUse": {
                           return [
-                            StreamEventEnum.FunctionCall({
+                            StreamEventEnum.ToolCall({
                               id: block.toolUse.id,
                               name: block.toolUse.name,
                               arguments: block.toolUse.input,

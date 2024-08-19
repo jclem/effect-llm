@@ -84,7 +84,19 @@ export class RefusalError extends Data.TaggedError("RefusalError")<{
   readonly refusal: string;
 }> {}
 
-export const make = () =>
+export const make = (
+  defaultParams: Partial<
+    Pick<
+      StreamParams<readonly ToolDefinitionAny[]>,
+      | "apiKey"
+      | "model"
+      | "maxTokens"
+      | "maxIterations"
+      | "system"
+      | "additionalParameters"
+    >
+  > = {},
+) =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
       Effect.map(HttpClient.filterStatusOk),
@@ -142,6 +154,8 @@ export const make = () =>
       },
 
       stream<F extends Readonly<ToolDefinitionAny[]>>(params: StreamParams<F>) {
+        params = { ...defaultParams, ...params };
+
         return HttpClientRequest.post("/v1/chat/completions").pipe(
           HttpClientRequest.setHeader(
             "Authorization",
