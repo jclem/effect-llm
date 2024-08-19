@@ -16,16 +16,16 @@ Effect.gen(function* () {
     events: [
       new Thread.UserMessage({
         content:
-          "Say hello with TEXT only (not a function), and then use a function to say 'Greetings'",
+          "Say hello with TEXT only (not a tool), and then use a tool to say 'Greetings'",
       }),
     ],
-    functions: [
-      Generation.defineFunction("sayHello", {
+    tools: [
+      Generation.defineTool("sayHello", {
         description: "Say hello to the user",
         input: S.Struct({
           greeting: S.String,
         }),
-        function: (_, input) =>
+        effect: (_, input) =>
           Effect.gen(function* () {
             yield* Console.log("GREETING:", input.greeting);
             return { ok: true };

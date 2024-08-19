@@ -29,42 +29,42 @@ import {
 } from "./thread.js";
 
 /** Parameters used to configure an LLM stream generation call. */
-export interface StreamParams<
-  FnDefns extends Readonly<FunctionDefinitionAny[]>,
-> {
+export interface StreamParams<FnDefns extends Readonly<ToolDefinitionAny[]>> {
   readonly apiKey: Redacted.Redacted;
   readonly model: string;
   readonly system?: string | undefined;
   readonly events: readonly ThreadEvent[];
   readonly maxIterations?: number | undefined;
   readonly maxTokens?: number | undefined;
-  readonly functions?: FnDefns | undefined;
-  readonly functionCall?: FunctionCallOption<FnDefns>;
+  readonly tools?: FnDefns | undefined;
+  readonly toolCall?: ToolCallOption<FnDefns>;
   readonly additionalParameters?: Record<string, unknown> | undefined;
 }
 
-export type FunctionCallOption<
-  FnDefns extends Readonly<FunctionDefinitionAny[]>,
-> = "auto" | "required" | { name: FnDefns[number]["name"] } | "none";
+export type ToolCallOption<FnDefns extends Readonly<ToolDefinitionAny[]>> =
+  | "auto"
+  | "required"
+  | { name: FnDefns[number]["name"] }
+  | "none";
 
 /**
- * An error reported back to the agent as an error during function execution.
+ * An error reported back to the agent as an error during tool execution.
  *
- * Any other error that occurs during function execution will be a runtime error
- * and will halt the generation process.
+ * Any other error that occurs during tool execution will be a runtime error and
+ * will halt the generation process.
  */
-export class FunctionError<E> extends Data.TaggedError("FunctionError")<{
+export class ToolError<E> extends Data.TaggedError("ToolError")<{
   readonly payload: E;
 }> {}
 
 /**
- * Wrap an error in a FunctionError and fail the effect with it.
+ * Wrap an error in a ToolError and fail the effect with it.
  *
- * @param payload The error to wrap in a FunctionError
- * @returns A new FunctionError
+ * @param payload The error to wrap in a ToolError
+ * @returns A new ToolError
  */
-export const functionError = <P>(payload: P) =>
-  Effect.fail(new FunctionError({ payload }));
+export const toolError = <P>(payload: P) =>
+  Effect.fail(new ToolError({ payload }));
 
 class HaltToolLoopError extends Data.TaggedError("HaltToolLoopError") {}
 
@@ -74,9 +74,9 @@ class HaltToolLoopError extends Data.TaggedError("HaltToolLoopError") {}
 export const haltToolLoop = () => Effect.fail(new HaltToolLoopError());
 
 /**
- * A function definition that can be used in a stream generation call.
+ * A tool definition that can be used in a stream generation call.
  */
-export interface FunctionDefinition<
+export interface ToolDefinition<
   Name extends string,
   A,
   E,
@@ -85,19 +85,23 @@ export interface FunctionDefinition<
   SI = SA,
   SR = never,
 > {
+  /** The name of the tool, given to the model */
   readonly name: Name;
+  /** A description of the tool, given to the model */
   readonly description?: string | undefined;
+  /** A schema defining the tool's inputs */
   readonly input: S.Schema<SA, SI, SR>;
-  readonly function: (
+  /** A function receiving the tool call ID and returning an effect that runs the tool */
+  readonly effect: (
     id: string,
     input: SA,
   ) => Effect.Effect<A, E | HaltToolLoopError, R>;
 }
 
 /**
- * A utility type for an any-typed function definition.
+ * A utility type for an any-typed tool definition.
  */
-export type FunctionDefinitionAny = FunctionDefinition<
+export type ToolDefinitionAny = ToolDefinition<
   string,
   any,
   any,
@@ -107,24 +111,24 @@ export type FunctionDefinitionAny = FunctionDefinition<
   any
 >;
 
-type FunctionDefinitionError<F extends FunctionDefinitionAny> =
-  F extends FunctionDefinition<string, any, infer _E, any, any, any, any>
+type ToolDefinitionError<F extends ToolDefinitionAny> =
+  F extends ToolDefinition<string, any, infer _E, any, any, any, any>
     ? _E
     : never;
 
-type FunctionDefinitionContext<F extends FunctionDefinitionAny> =
-  F extends FunctionDefinition<string, any, any, infer _C, any, any, infer _SC>
+type ToolDefinitionContext<F extends ToolDefinitionAny> =
+  F extends ToolDefinition<string, any, any, infer _C, any, any, infer _SC>
     ? _C | _SC
     : never;
 
 /**
- * Define a function by providing its name, implementation, and other details.
+ * Define a tool by providing its name, implementation, and other details.
  *
- * @param name The name of the function
- * @param definition The function definition
- * @returns A new function definition
+ * @param name The name of the tool
+ * @param definition The tool definition
+ * @returns A new tool definition
  */
-export function defineFunction<
+export function defineTool<
   Name extends string,
   A,
   E,
@@ -134,8 +138,8 @@ export function defineFunction<
   SR = never,
 >(
   name: Name,
-  definition: Omit<FunctionDefinition<Name, A, E, R, SA, SI, SR>, "name">,
-): FunctionDefinition<Name, A, E, R, SA, SI, SR> {
+  definition: Omit<ToolDefinition<Name, A, E, R, SA, SI, SR>, "name">,
+): ToolDefinition<Name, A, E, R, SA, SI, SR> {
   return { ...definition, name };
 }
 
@@ -146,13 +150,13 @@ export type StreamEvent = Data.TaggedEnum<{
   ContentStart: { readonly content: string };
   Content: { readonly content: string };
   Message: { readonly message: AssistantMessage };
-  FunctionCallStart: { readonly id: string; readonly name: string };
-  FunctionCall: {
+  ToolCallStart: { readonly id: string; readonly name: string };
+  ToolCall: {
     readonly id: string;
     readonly name: string;
     readonly arguments: string;
   };
-  InvalidFunctionCall: {
+  InvalidToolCall: {
     readonly id: string;
     readonly name: string;
     readonly arguments: string;
@@ -182,58 +186,58 @@ export class Generation extends Context.Tag("Generation")<
 >() {}
 
 /**
- * The result of a function call.
+ * The result of a tool call.
  */
-export type FunctionResult<RS, RE> = Data.TaggedEnum<{
-  FunctionResultSuccess: {
+export type ToolResult<RS, RE> = Data.TaggedEnum<{
+  ToolResultSuccess: {
     readonly id: string;
     readonly name: string;
     readonly result: RS;
   };
-  FunctionResultError: {
+  ToolResultError: {
     readonly id: string;
     readonly name: string;
     readonly result: RE;
   };
 }>;
 
-interface FunctionResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
-  readonly taggedEnum: FunctionResult<this["A"], this["B"]>;
+interface ToolResultDefinition extends Data.TaggedEnum.WithGenerics<2> {
+  readonly taggedEnum: ToolResult<this["A"], this["B"]>;
 }
 
 /**
- * The result of a function call.
+ * The result of a tool call.
  */
-export const FunctionResultEnum = Data.taggedEnum<FunctionResultDefinition>();
+export const ToolResultEnum = Data.taggedEnum<ToolResultDefinition>();
 
 /**
- * An error that occurs when a function call is invalid.
+ * An error that occurs when a tool call is invalid.
  */
-export class InvalidFunctionCallError extends Data.TaggedError(
-  "InvalidFunctionCallError",
+export class InvalidToolCallError extends Data.TaggedError(
+  "InvalidToolCallError",
 )<{
-  readonly functionCall: TaggedEnum.Value<StreamEvent, "FunctionCall">;
+  readonly toolCall: TaggedEnum.Value<StreamEvent, "ToolCall">;
   readonly error: ParseError;
 }> {
   message = this.error.message;
 }
 
 /**
- * An error that occurs when an LLM attempts to call an unknown function.
+ * An error that occurs when an LLM attempts to call an unknown tool.
  */
-export class UnknownFunctionCallError extends Data.TaggedError(
-  "UnknownFunctionCallError",
+export class UnknownToolCallError extends Data.TaggedError(
+  "UnknownToolCallError",
 )<{
-  readonly functionCall: TaggedEnum.Value<StreamEvent, "FunctionCall">;
+  readonly toolCall: TaggedEnum.Value<StreamEvent, "ToolCall">;
 }> {
-  message = `Unknown function call: ${this.functionCall.name}`;
+  message = `Unknown tool call: ${this.toolCall.name}`;
 }
 
 /**
- * An error that occurs when a function fails to execute.
+ * An error that occurs when a tool fails to execute.
  */
-export class FunctionExecutionError<R> extends Data.TaggedError(
-  "FunctionExecutionError",
+export class ToolExecutionError<R> extends Data.TaggedError(
+  "ToolExecutionError",
 )<{
   readonly id: string;
   readonly error: R;
@@ -247,7 +251,7 @@ export class FunctionExecutionError<R> extends Data.TaggedError(
  * @returns A stream of events from the LLM provider
  */
 export const stream: {
-  <F extends Readonly<FunctionDefinitionAny[]>>(
+  <F extends Readonly<ToolDefinitionAny[]>>(
     params: StreamParams<F>,
   ): (
     provider: Provider,
@@ -257,11 +261,11 @@ export const stream: {
     | HttpClientError
     | HttpBodyError
     | UnknownException
-    | FunctionExecutionError<unknown>
-    | FunctionDefinitionError<F[number]>,
-    Generation | Scope.Scope | FunctionDefinitionContext<F[number]>
+    | ToolExecutionError<unknown>
+    | ToolDefinitionError<F[number]>,
+    Generation | Scope.Scope | ToolDefinitionContext<F[number]>
   >;
-  <F extends Readonly<FunctionDefinitionAny[]>>(
+  <F extends Readonly<ToolDefinitionAny[]>>(
     provider: Provider,
     params: StreamParams<F>,
   ): Stream.Stream<
@@ -271,7 +275,7 @@ export const stream: {
   >;
 } = dual(
   2,
-  <F extends Readonly<FunctionDefinitionAny[]>>(
+  <F extends Readonly<ToolDefinitionAny[]>>(
     provider: Provider,
     params: StreamParams<F>,
   ) => provider.stream(params),
@@ -280,25 +284,25 @@ export const stream: {
 /**
  * An event emitted during a stream using tool calls.
  */
-export type StreamToolsEvent = StreamEvent | FunctionResult<unknown, unknown>;
+export type StreamToolsEvent = StreamEvent | ToolResult<unknown, unknown>;
 
 export class MaxIterationsError extends Data.TaggedError(
   "MaxIterationsError",
 ) {}
 
 /**
- * Generate a stream of events from the LLM provider, invoking the defined
- * functions as needed and returning the results to the LLM.
+ * Generate a stream of events from the LLM provider, invoking the defined tools
+ * as needed and returning the results to the LLM.
  *
  * This will loop until the maxIterations is reached, or until the stream
- * completes with no more function calls.
+ * completes with no more tool calls.
  *
  * @param provider The provider to generate the stream from
  * @param params The parameters to configure the stream generation call
  * @returns A stream of events from the LLM provider
  */
 export const streamTools: {
-  <FnDefns extends Readonly<FunctionDefinitionAny[]>>(
+  <FnDefns extends Readonly<ToolDefinitionAny[]>>(
     params: StreamParams<FnDefns>,
   ): (
     provider: Provider,
@@ -309,11 +313,11 @@ export const streamTools: {
     | HttpClientError
     | HttpBodyError
     | UnknownException
-    | FunctionExecutionError<unknown>
-    | FunctionDefinitionError<FnDefns[number]>,
-    Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+    | ToolExecutionError<unknown>
+    | ToolDefinitionError<FnDefns[number]>,
+    Scope.Scope | ToolDefinitionContext<FnDefns[number]>
   >;
-  <FnDefns extends Readonly<FunctionDefinitionAny[]>>(
+  <FnDefns extends Readonly<ToolDefinitionAny[]>>(
     provider: Provider,
     params: StreamParams<FnDefns>,
   ): Stream.Stream<
@@ -323,13 +327,13 @@ export const streamTools: {
     | HttpClientError
     | HttpBodyError
     | UnknownException
-    | FunctionExecutionError<unknown>
-    | FunctionDefinitionError<FnDefns[number]>,
-    Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+    | ToolExecutionError<unknown>
+    | ToolDefinitionError<FnDefns[number]>,
+    Scope.Scope | ToolDefinitionContext<FnDefns[number]>
   >;
 } = dual(
   2,
-  <FnDefns extends Readonly<FunctionDefinitionAny[]>>(
+  <FnDefns extends Readonly<ToolDefinitionAny[]>>(
     provider: Provider,
     params: StreamParams<FnDefns>,
   ) => {
@@ -340,9 +344,9 @@ export const streamTools: {
       | HttpClientError
       | HttpBodyError
       | UnknownException
-      | FunctionExecutionError<unknown>
-      | FunctionDefinitionError<FnDefns[number]>,
-      Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+      | ToolExecutionError<unknown>
+      | ToolDefinitionError<FnDefns[number]>,
+      Scope.Scope | ToolDefinitionContext<FnDefns[number]>
     >(
       (emit) =>
         Effect.gen(function* () {
@@ -362,8 +366,8 @@ export const streamTools: {
               | HttpClientError
               | HttpBodyError
               | UnknownException
-              | FunctionExecutionError<unknown>
-              | FunctionDefinitionError<FnDefns[number]>,
+              | ToolExecutionError<unknown>
+              | ToolDefinitionError<FnDefns[number]>,
           ) => Effect.promise(() => emit.fail(error));
 
           const fnCalls: {
@@ -374,39 +378,42 @@ export const streamTools: {
             fnDefn: FnDefns[number];
           }[] = [];
 
-          // On each event, we first check to see if it's a function call and record
+          // On each event, we first check to see if it's a tool call and record
           // it. Then, we emit the event.
           const onStreamEvent = (event: StreamEvent) =>
             pipe(
               event,
               Match.type<StreamEvent>().pipe(
-                Match.tag("FunctionCall", (functionCall) =>
+                Match.tag("ToolCall", (toolCall) =>
                   Effect.gen(function* () {
                     const fnFound = Array.findFirst(
-                      params.functions ?? [],
-                      (fn) => fn.name === functionCall.name,
+                      params.tools ?? [],
+                      (fn) => fn.name === toolCall.name,
                     );
 
                     if (Option.isNone(fnFound)) {
                       return yield* Effect.fail(
-                        new UnknownFunctionCallError({ functionCall }),
+                        new UnknownToolCallError({ toolCall: toolCall }),
                       );
                     }
 
                     const input: unknown = yield* S.decodeUnknown(
                       S.parseJson(fnFound.value.input),
-                    )(functionCall.arguments).pipe(
+                    )(toolCall.arguments).pipe(
                       Effect.catchTag("ParseError", (error) =>
                         Effect.fail(
-                          new InvalidFunctionCallError({ functionCall, error }),
+                          new InvalidToolCallError({
+                            toolCall: toolCall,
+                            error,
+                          }),
                         ),
                       ),
                     );
 
                     fnCalls.push({
-                      id: functionCall.id,
-                      name: functionCall.name,
-                      args: functionCall.arguments,
+                      id: toolCall.id,
+                      name: toolCall.name,
+                      args: toolCall.arguments,
                       input,
                       fnDefn: fnFound.value,
                     });
@@ -419,30 +426,30 @@ export const streamTools: {
               Effect.flatMap(single),
             );
 
-          const onInvalidFunctionCall = (
-            error: InvalidFunctionCallError | UnknownFunctionCallError,
+          const onInvalidToolCall = (
+            error: InvalidToolCallError | UnknownToolCallError,
           ) =>
             Effect.gen(function* () {
               yield* single(
-                StreamEventEnum.InvalidFunctionCall({
-                  id: error.functionCall.id,
-                  name: error.functionCall.name,
-                  arguments: error.functionCall.arguments,
+                StreamEventEnum.InvalidToolCall({
+                  id: error.toolCall.id,
+                  name: error.toolCall.name,
+                  arguments: error.toolCall.arguments,
                 }),
               );
 
               const input = yield* S.decodeUnknown(S.parseJson())(
-                error.functionCall.arguments,
+                error.toolCall.arguments,
               );
 
               const failedToolCall = new ToolUseEvent({
-                id: error.functionCall.id,
-                name: error.functionCall.name,
+                id: error.toolCall.id,
+                name: error.toolCall.name,
                 input,
               });
 
               const failedToolResult = new ToolResultErrorEvent({
-                id: error.functionCall.id,
+                id: error.toolCall.id,
                 result: error.message,
               });
 
@@ -456,7 +463,7 @@ export const streamTools: {
               }).pipe(Stream.runForEach((event) => single(event)));
             });
 
-          const handleFunctionCalls = Effect.gen(function* () {
+          const handleToolCalls = Effect.gen(function* () {
             if (fnCalls.length === 0) {
               return yield* end();
             }
@@ -480,17 +487,17 @@ export const streamTools: {
 
               const output: Either.Either<
                 any,
-                FunctionError<any>
-              > = yield* fnCall.fnDefn.function(fnCall.id, fnCall.input).pipe(
+                ToolError<any>
+              > = yield* fnCall.fnDefn.effect(fnCall.id, fnCall.input).pipe(
                 Effect.map(Either.right),
-                Effect.catchTag("FunctionError", (err) =>
+                Effect.catchTag("ToolError", (err) =>
                   Effect.succeed(Either.left(err)),
                 ),
                 Effect.catchAll((error: unknown) =>
                   Effect.fail(
                     error instanceof HaltToolLoopError
                       ? error
-                      : new FunctionExecutionError({ id: fnCall.id, error }),
+                      : new ToolExecutionError({ id: fnCall.id, error }),
                   ),
                 ),
               );
@@ -499,7 +506,7 @@ export const streamTools: {
 
               if (Either.isRight(output)) {
                 yield* single(
-                  FunctionResultEnum.FunctionResultSuccess({
+                  ToolResultEnum.ToolResultSuccess({
                     id: fnCall.id,
                     name: fnCall.name,
                     result: output.right as unknown,
@@ -514,7 +521,7 @@ export const streamTools: {
                 );
               } else {
                 yield* single(
-                  FunctionResultEnum.FunctionResultError({
+                  ToolResultEnum.ToolResultError({
                     id: fnCall.id,
                     name: fnCall.name,
                     result: output.left.payload as unknown,
@@ -551,16 +558,16 @@ export const streamTools: {
           yield* provider.stream(params).pipe(
             Stream.runForEach(onStreamEvent),
             Effect.catchIf(
-              (err): err is InvalidFunctionCallError =>
-                err instanceof InvalidFunctionCallError,
-              (error) => onInvalidFunctionCall(error),
+              (err): err is InvalidToolCallError =>
+                err instanceof InvalidToolCallError,
+              (error) => onInvalidToolCall(error),
             ),
             Effect.catchIf(
-              (err): err is UnknownFunctionCallError =>
-                err instanceof UnknownFunctionCallError,
-              (error) => onInvalidFunctionCall(error),
+              (err): err is UnknownToolCallError =>
+                err instanceof UnknownToolCallError,
+              (error) => onInvalidToolCall(error),
             ),
-            Effect.andThen(() => handleFunctionCalls),
+            Effect.andThen(() => handleToolCalls),
             Effect.catchTag("HaltToolLoopError", () => end()),
             Effect.catchAll((error) => fail(error)),
             Effect.catchAllDefect((defect) =>
@@ -576,9 +583,9 @@ export const streamTools: {
           | HttpClientError
           | HttpBodyError
           | UnknownException
-          | FunctionExecutionError<unknown>
-          | FunctionDefinitionError<FnDefns[number]>,
-          Scope.Scope | FunctionDefinitionContext<FnDefns[number]>
+          | ToolExecutionError<unknown>
+          | ToolDefinitionError<FnDefns[number]>,
+          Scope.Scope | ToolDefinitionContext<FnDefns[number]>
         >,
     );
   },

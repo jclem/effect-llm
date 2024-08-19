@@ -6,9 +6,9 @@ import {
 import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Data, Effect, Match, Option, Redacted, Stream } from "effect";
 import type {
-  FunctionCallOption,
-  FunctionDefinitionAny,
   StreamEvent,
+  ToolCallOption,
+  ToolDefinitionAny,
 } from "../generation.js";
 import { StreamEventEnum, type StreamParams } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
@@ -141,9 +141,7 @@ export const make = () =>
         );
       },
 
-      stream<F extends Readonly<FunctionDefinitionAny[]>>(
-        params: StreamParams<F>,
-      ) {
+      stream<F extends Readonly<ToolDefinitionAny[]>>(params: StreamParams<F>) {
         return HttpClientRequest.post("/v1/chat/completions").pipe(
           HttpClientRequest.setHeader(
             "Authorization",
@@ -154,9 +152,9 @@ export const make = () =>
             messages: messagesFromEvents(params.events),
             max_tokens: params.maxTokens,
             stream: true,
-            tools: params.functions ? gatherTools(params.functions) : undefined,
-            tool_choice: params.functionCall
-              ? getToolChoice(params.functionCall)
+            tools: params.tools ? gatherTools(params.tools) : undefined,
+            tool_choice: params.toolCall
+              ? getToolChoice(params.toolCall)
               : undefined,
             ...params.additionalParameters,
           }),
@@ -172,7 +170,7 @@ export const make = () =>
               { id: string; name: string; arguments: string }
             >();
 
-            // TODO: Implement ContentStart, FunctionCallStart, etc.
+            // TODO: Implement ContentStart, ToolCallStart, etc.
             return Stream.mapConcat(stream, (event) => {
               const choice = event.choices[0];
               const content = choice.delta.content;
@@ -213,7 +211,7 @@ export const make = () =>
               if (choice.finish_reason != null) {
                 for (const tool of partialToolCalls.values()) {
                   events.push(
-                    StreamEventEnum.FunctionCall({
+                    StreamEventEnum.ToolCall({
                       id: tool.id,
                       name: tool.name,
                       arguments: tool.arguments,
@@ -230,7 +228,7 @@ export const make = () =>
     };
   });
 
-const gatherTools = (tools: Readonly<FunctionDefinitionAny[]>) =>
+const gatherTools = (tools: Readonly<ToolDefinitionAny[]>) =>
   tools.map((tool) => ({
     type: "function",
     function: {
@@ -241,7 +239,7 @@ const gatherTools = (tools: Readonly<FunctionDefinitionAny[]>) =>
   }));
 
 const getToolChoice = (
-  toolCall: FunctionCallOption<Readonly<FunctionDefinitionAny[]>>,
+  toolCall: ToolCallOption<Readonly<ToolDefinitionAny[]>>,
 ) => {
   if (typeof toolCall === "object" && "name" in toolCall) {
     return {

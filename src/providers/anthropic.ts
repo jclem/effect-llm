@@ -14,9 +14,9 @@ import {
 } from "effect";
 import { UnknownException } from "effect/Cause";
 import type {
-  FunctionCallOption,
-  FunctionDefinitionAny,
   StreamEvent,
+  ToolCallOption,
+  ToolDefinitionAny,
 } from "../generation.js";
 import {
   StreamEventEnum,
@@ -115,12 +115,10 @@ export const make = (): Effect.Effect<
     );
 
     return {
-      stream<F extends Readonly<FunctionDefinitionAny[]>>(
-        params: StreamParams<F>,
-      ) {
+      stream<F extends Readonly<ToolDefinitionAny[]>>(params: StreamParams<F>) {
         return Effect.gen(function* () {
-          const toolChoice = params.functionCall
-            ? yield* getToolChoice(params.functionCall)
+          const toolChoice = params.toolCall
+            ? yield* getToolChoice(params.toolCall)
             : undefined;
 
           return HttpClientRequest.post("/v1/messages").pipe(
@@ -135,9 +133,7 @@ export const make = (): Effect.Effect<
               messages: messagesFromEvents(params.events),
               max_tokens: params.maxTokens,
               stream: true,
-              tools: params.functions
-                ? gatherTools(params.functions)
-                : undefined,
+              tools: params.tools ? gatherTools(params.tools) : undefined,
               tool_choice: toolChoice,
               ...params.additionalParameters,
             }),
@@ -416,7 +412,7 @@ const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
     )(event),
 );
 
-const gatherTools = (tools: Readonly<FunctionDefinitionAny[]>) =>
+const gatherTools = (tools: Readonly<ToolDefinitionAny[]>) =>
   tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
@@ -431,7 +427,7 @@ class InvalidFunctionCallOptionError extends Data.TaggedError(
 }> {}
 
 const getToolChoice = (
-  toolCall: FunctionCallOption<Readonly<FunctionDefinitionAny[]>>,
+  toolCall: ToolCallOption<Readonly<ToolDefinitionAny[]>>,
 ) =>
   Effect.gen(function* () {
     if (typeof toolCall === "object" && "name" in toolCall) {

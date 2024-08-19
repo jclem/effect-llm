@@ -94,41 +94,41 @@ program.pipe(
 );
 ```
 
-## Function-Calling
+## Tool-Calling
 
-There are two ways of utilizing LLM functions in this library.
+There are two ways of utilizing LLM tools in this library.
 
 ### Using `Generation.stream`
 
-The `Generation.stream` function accepts `functions` and `functionCall` as
+The `Generation.stream` function accepts `tools` and `toolCall` as
 parameters. When using these parameters, you can expect to see the following
 events emitted from the stream:
 
-| Name                | Payload Type                                                                  | Description                                                                           |
-| ------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `FunctionCallStart` | `{ readonly id: string; readonly name: string; }`                             | Emitted when a function call begins, but before its arguments have been streamed      |
-| `FunctionCall`      | `{ readonly id: string; readonly name: string; readonly arguments: string; }` | Emitted when a function call and its arguments have been fully streamed and collected |
+| Name            | Payload Type                                                                  | Description                                                                       |
+| --------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `ToolCallStart` | `{ readonly id: string; readonly name: string; }`                             | Emitted when a tool call begins, but before its arguments have been streamed      |
+| `ToolCall`      | `{ readonly id: string; readonly name: string; readonly arguments: string; }` | Emitted when a tool call and its arguments have been fully streamed and collected |
 
-Note that when using `Generation.stream`, the function calls are not validated
-or executed, nor are there arguments even parsed.
+Note that when using `Generation.stream`, the tool calls are not validated or
+executed, nor are there arguments even parsed.
 
 ### Using `Generation.streamTools`
 
-If instead you would like to have effect-llm parse and _execute_ function calls
-for you, use `Generation.streamTools`. This function accepts the same parameters
-as `Generation.stream`, with the addition of a `maxIterations` parameter used to
+If instead you would like to have effect-llm parse and _execute_ tool calls for
+you, use `Generation.streamTools`. This tool accepts the same parameters as
+`Generation.stream`, with the addition of a `maxIterations` parameter used to
 limit the number of loops that will be executed. When using
 `Generation.streamTools`, the following sequence of events will occur:
 
 1. Send the completion request to the provider
 2. Parse the response
-3. If there are function calls in the response:
+3. If there are tool calls in the response:
    1. Parse the arguments
-   2. Append the function call to the events list
-   3. Call the function
-   4. Append the function result to the events list
+   2. Append the tool call to the events list
+   3. Call the tool
+   4. Append the tool result to the events list
    5. Go to (1) with the new events list
-4. OR, If there are no function calls in the resopnse:
+4. OR, If there are no tool calls in the resopnse:
    1. End the stream
 
 If the `maxIterations` limit is exceeded, the stream will emit a
@@ -137,18 +137,18 @@ If the `maxIterations` limit is exceeded, the stream will emit a
 The stream returned by `Generation.streamTools` emits the same events as
 `Generation.stream` with some additions:
 
-| Name                    | Payload Type                                                                  | Description                                                                                               |
-| ----------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `FunctionCallStart`     | `{ readonly id: string; readonly name: string; }`                             | Emitted when a function call begins, but before its arguments have been streamed                          |
-| `FunctionCall`          | `{ readonly id: string; readonly name: string; readonly arguments: string; }` | Emitted when a function call and its arguments have been fully streamed and collected                     |
-| `InvalidFunctionCall`   | `{ readonly id: string; readonly name: string; readonly arguments: string; }` | Emitted when a function call's arguments are invalid or the function call is not in the defined functions |
-| `FunctionResultSuccess` | `{ readonly id: string; readonly name: string; readonly result: unknown }`    | Emitted when a function call's arguments are invalid or the function call is not in the defined functions |
-| `FunctionResultError`   | `{ readonly id: string; readonly name: string; readonly result: unknown }`    | Emitted when a function call's arguments are invalid or the function call is not in the defined functions |
+| Name                | Payload Type                                                                  | Description                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `ToolCallStart`     | `{ readonly id: string; readonly name: string; }`                             | Emitted when a tool call begins, but before its arguments have been streamed                  |
+| `ToolCall`          | `{ readonly id: string; readonly name: string; readonly arguments: string; }` | Emitted when a tool call and its arguments have been fully streamed and collected             |
+| `InvalidToolCall`   | `{ readonly id: string; readonly name: string; readonly arguments: string; }` | Emitted when a tool call's arguments are invalid or the tool call is not in the defined tools |
+| `ToolResultSuccess` | `{ readonly id: string; readonly name: string; readonly result: unknown }`    | Emitted when a tool call's arguments are invalid or the tool call is not in the defined tools |
+| `ToolResultError`   | `{ readonly id: string; readonly name: string; readonly result: unknown }`    | Emitted when a tool call's arguments are invalid or the tool call is not in the defined tools |
 
-### Defining Functions
+### Defining Tools
 
-To define a function for use with `Generation.streamTools`[^2], use the
-`Generation.defineFunction` function:
+To define a tool for use with `Generation.streamTools`[^2], use the
+`Generation.defineTool` function:
 
 ```typescript
 const apiKey = Config.redacted("ANTHROPIC_API_KEY");
@@ -156,10 +156,10 @@ const apiKey = Config.redacted("ANTHROPIC_API_KEY");
 const program = Effect.gen(function* () {
   const provider = yield* Generation.Generation;
 
-  const sayHello = Generation.defineFunction("sayHello", {
+  const sayHello = Generation.defineTool("sayHello", {
     description: "Say hello to the user",
     input: Schema.Struct({ name: Schema.String }),
-    function: (functionCallID, functionArguments) =>
+    effect: (ToolCallID, functionArguments) =>
       Console.log(`Hello, ${functionArguments.name}`).pipe(
         Effect.as({ ok: true }),
       ),
@@ -190,19 +190,19 @@ program.pipe(
 
 #### Error Handling
 
-Any errors that occur during function execution will _halt_ the stream and yield
-a `FunctionExecutionError`. In order to handle an error and report it to the
-model, you should instead fail the effect with a `FunctionError` using the
-`Generation.functionError` function:
+Any errors that occur during tool execution will _halt_ the stream and yield
+a `ToolExecutionError`. In order to handle an error and report it to the
+model, you should instead fail the effect with a `ToolError` using the
+`Generation.toolError` function:
 
 ```typescript
-const sayHello = Generation.defineFunction("sayHello", {
+const sayHello = Generation.defineTool("sayHello", {
   description: "Say hello to the user",
   input: Schema.Struct({ name: Schema.String }),
-  function: (functionCallID, functionArguments) =>
-    Console.log(`Hello, ${functionArguments.name}`).pipe(
+  effect: (toolCallID, toolArguments) =>
+    Console.log(`Hello, ${toolArguments.name}`).pipe(
       Effect.catchAll((err) =>
-        Generation.functionError({
+        Generation.toolError({
           message: "An error occurred while saying hello",
           error: err,
         }),
@@ -212,20 +212,20 @@ const sayHello = Generation.defineFunction("sayHello", {
 });
 ```
 
-You can also fail mid-effect, since `Generation.functionError` actually fails the effect:
+You can also fail mid-effect, since `Generation.toolError` actually fails the effect:
 
 ```typescript
-const sayHello = Generation.defineFunction("sayHello", {
+const sayHello = Generation.defineTool("sayHello", {
   description: "Say hello to the user",
   input: Schema.Struct({ name: Schema.String }),
-  function: (functionCallID, functionArguments) =>
+  effect: (toolCallID, toolArguments) =>
     Effect.gen(function* () {
-      return yield* Generation.functionError("Whoops!");
+      return yield* Generation.toolError("Whoops!");
     }),
 });
 ```
 
-The payload passed to `Generation.functionError` can be any value, and it is
+The payload passed to `Generation.toolError` can be any value, and it is
 serialized as JSON and sent to the model, which is notified that an error
 occurred.
 
@@ -235,17 +235,17 @@ If you want to halt the iteration loop eraly, you can use the
 `Generation.haltToolLoop` function:
 
 ```typescript
-const sayHello = Generation.defineFunction("sayHello", {
+const sayHello = Generation.defineTool("sayHello", {
   description: "Say hello to the user",
   input: Schema.Struct({ name: Schema.String }),
-  function: (functionCallID, functionArguments) =>
+  effect: (toolCallID, toolArguments) =>
     Effect.gen(function* () {
       return yield* Generation.haltToolLoop();
     }),
 });
 ```
 
-This will immediately halt the loop before executing any other function calls
+This will immediately halt the loop before executing any other tool calls
 returned by the model in that same loop, and will yield end the stream without
 an error.
 
@@ -255,6 +255,6 @@ an error.
     API will return a 400 if it's not provided.
 
 [^2]:
-    You can also use `Generation.defineFunction` with `Generation.stream`,
+    You can also use `Generation.defineTool` with `Generation.stream`,
     because currently, it uses the same parameter type, but doesn't actually
-    validate or execute the function calls.
+    validate or execute the tool calls.
