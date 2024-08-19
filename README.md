@@ -159,17 +159,15 @@ const program = Effect.gen(function* () {
   const sayHello = Generation.defineTool("sayHello", {
     description: "Say hello to the user",
     input: Schema.Struct({ name: Schema.String }),
-    effect: (ToolCallID, functionArguments) =>
-      Console.log(`Hello, ${functionArguments.name}`).pipe(
-        Effect.as({ ok: true }),
-      ),
+    effect: (toolCallID, toolArgs) =>
+      Console.log(`Hello, ${toolArgs.name}`).pipe(Effect.as({ ok: true })),
   });
 
   const stream = Generation.streamTools(provider, {
     apiKey: yield* apiKey,
     model: Providers.Anthropic.Model.Claude35Sonnet,
     maxTokens: 512,
-    functions: [sayHello],
+    tools: [sayHello],
     events: [
       new Thread.UserMessage({
         content: "Hello, I'm Jonathan.",
@@ -199,8 +197,8 @@ model, you should instead fail the effect with a `ToolError` using the
 const sayHello = Generation.defineTool("sayHello", {
   description: "Say hello to the user",
   input: Schema.Struct({ name: Schema.String }),
-  effect: (toolCallID, toolArguments) =>
-    Console.log(`Hello, ${toolArguments.name}`).pipe(
+  effect: (toolCallID, toolArgs) =>
+    Console.log(`Hello, ${toolArgs.name}`).pipe(
       Effect.catchAll((err) =>
         Generation.toolError({
           message: "An error occurred while saying hello",
@@ -218,7 +216,7 @@ You can also fail mid-effect, since `Generation.toolError` actually fails the ef
 const sayHello = Generation.defineTool("sayHello", {
   description: "Say hello to the user",
   input: Schema.Struct({ name: Schema.String }),
-  effect: (toolCallID, toolArguments) =>
+  effect: (toolCallID, toolArgs) =>
     Effect.gen(function* () {
       return yield* Generation.toolError("Whoops!");
     }),
@@ -238,7 +236,7 @@ If you want to halt the iteration loop eraly, you can use the
 const sayHello = Generation.defineTool("sayHello", {
   description: "Say hello to the user",
   input: Schema.Struct({ name: Schema.String }),
-  effect: (toolCallID, toolArguments) =>
+  effect: (toolCallID, toolArgs) =>
     Effect.gen(function* () {
       return yield* Generation.haltToolLoop();
     }),
