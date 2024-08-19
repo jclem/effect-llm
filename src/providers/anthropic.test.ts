@@ -9,6 +9,14 @@ import { Anthropic } from "./index.js";
 const setup = <A, E, R>(self: Effect.Effect<A, E, R>) =>
   self.pipe(Effect.scoped, Effect.provide(BunContext.layer));
 
+const responseStreamLayer = (body: string) =>
+  Layer.succeed(
+    HttpClient.HttpClient,
+    HttpClient.makeDefault((req) =>
+      Effect.succeed(HttpClientResponse.fromWeb(req, new Response(body))),
+    ),
+  );
+
 describe("Anthropic", () => {
   describe(".stream", () => {
     it(
@@ -35,13 +43,7 @@ describe("Anthropic", () => {
         expect(result).toEqual("Hello, there! How may I help you?");
       }).pipe(
         Effect.provide(
-          Layer.succeed(
-            HttpClient.HttpClient,
-            HttpClient.makeDefault((request) => {
-              return Effect.sync(function () {
-                return HttpClientResponse.fromWeb(
-                  request,
-                  new Response(`
+          responseStreamLayer(`
 event: content_block_start
 data: { "type": "content_block_start", "index": 0, "content_block": { "type": "text", "text": "" } }
 
@@ -53,10 +55,6 @@ data: { "type": "content_block_delta", "index": 0, "delta": { "type": "text_delt
 
 event: content_block_stop
 data: { "type": "content_block_stop", "index": 0 }\n\n`),
-                );
-              });
-            }),
-          ),
         ),
         setup,
       ),
@@ -89,13 +87,7 @@ data: { "type": "content_block_stop", "index": 0 }\n\n`),
         ]);
       }).pipe(
         Effect.provide(
-          Layer.succeed(
-            HttpClient.HttpClient,
-            HttpClient.makeDefault((request) => {
-              return Effect.sync(function () {
-                return HttpClientResponse.fromWeb(
-                  request,
-                  new Response(`
+          responseStreamLayer(`
 event: content_block_start
 data: { "type": "content_block_start", "index": 0, "content_block": { "type": "tool_use", "id": "123", "name": "sayHello", "input": {} } }
 
@@ -107,10 +99,6 @@ data: { "type": "content_block_delta", "index": 0, "delta": { "type": "input_jso
 
 event: content_block_stop
 data: { "type": "content_block_stop", "index": 0 }\n\n`),
-                );
-              });
-            }),
-          ),
         ),
         setup,
       ),
@@ -130,19 +118,9 @@ data: { "type": "content_block_stop", "index": 0 }\n\n`),
           .pipe(Stream.runDrain);
       }).pipe(
         Effect.provide(
-          Layer.succeed(
-            HttpClient.HttpClient,
-            HttpClient.makeDefault((request) => {
-              return Effect.sync(function () {
-                return HttpClientResponse.fromWeb(
-                  request,
-                  new Response(`
+          responseStreamLayer(`
 event: error
 data: { "type": "error", "error": { "type": "something" } }\n\n`),
-                );
-              });
-            }),
-          ),
         ),
         setup,
       ),
