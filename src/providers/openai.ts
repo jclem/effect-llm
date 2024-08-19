@@ -6,6 +6,7 @@ import {
 import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Data, Effect, Match, Option, Redacted, Stream } from "effect";
 import type {
+  Provider,
   StreamEvent,
   ToolCallOption,
   ToolDefinitionAny,
@@ -13,6 +14,7 @@ import type {
 import { StreamEventEnum, type StreamParams } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
+import { MissingParameterError, type DefaultParams } from "./index.js";
 
 export enum Model {
   GPT4Turbo = "gpt-4-turbo",
@@ -85,18 +87,8 @@ export class RefusalError extends Data.TaggedError("RefusalError")<{
 }> {}
 
 export const make = (
-  defaultParams: Partial<
-    Pick<
-      StreamParams<readonly ToolDefinitionAny[]>,
-      | "apiKey"
-      | "model"
-      | "maxTokens"
-      | "maxIterations"
-      | "system"
-      | "additionalParameters"
-    >
-  > = {},
-) =>
+  defaultParams: DefaultParams = {},
+): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
       Effect.map(HttpClient.filterStatusOk),
@@ -116,128 +108,154 @@ export const make = (
 
     return {
       structured<A, I, R>(params: StructuredParams<A, I, R>) {
-        return HttpClientRequest.post("/v1/chat/completions").pipe(
-          HttpClientRequest.setHeader(
-            "Authorization",
-            `Bearer ${Redacted.value(params.apiKey)}`,
-          ),
-          HttpClientRequest.jsonBody({
-            model: params.model,
-            messages: messagesFromEvents(params.events),
-            max_tokens: params.maxTokens,
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: params.name,
-                strict: params.strict ?? true,
-                schema: JSONSchema.make(params.schema),
-              },
-            },
-            ...params.additionalParameters,
-          }),
-          Effect.flatMap(client),
-          Effect.flatMap(HttpClientResponse.schemaBodyJson(ChatCompletion)),
-          Effect.map((comp) => comp.choices[0].message),
-          Effect.flatMap((msg) =>
-            Effect.gen(function* () {
-              if (msg.refusal) {
-                return yield* Effect.fail(
-                  new RefusalError({ refusal: msg.refusal }),
-                );
-              }
+        params = { ...defaultParams, ...params };
 
-              return yield* Effect.fromNullable(msg.content);
+        return Effect.gen(function* () {
+          const apiKey = yield* Effect.fromNullable(params.apiKey).pipe(
+            Effect.map(Redacted.value),
+            Effect.mapError(
+              () => new MissingParameterError({ parameter: "apiKey" }),
+            ),
+          );
+
+          const model = yield* Effect.fromNullable(params.model).pipe(
+            Effect.mapError(
+              () => new MissingParameterError({ parameter: "model" }),
+            ),
+          );
+
+          return yield* HttpClientRequest.post("/v1/chat/completions").pipe(
+            HttpClientRequest.setHeader("Authorization", `Bearer ${apiKey}`),
+            HttpClientRequest.jsonBody({
+              model,
+              messages: messagesFromEvents(params.events),
+              max_tokens: params.maxTokens,
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: params.name,
+                  strict: params.strict ?? true,
+                  schema: JSONSchema.make(params.schema),
+                },
+              },
+              ...params.additionalParameters,
             }),
-          ),
-          Effect.flatMap(S.decodeUnknown(S.parseJson(params.schema))),
-        );
+            Effect.flatMap(client),
+            Effect.flatMap(HttpClientResponse.schemaBodyJson(ChatCompletion)),
+            Effect.map((comp) => comp.choices[0].message),
+            Effect.flatMap((msg) =>
+              Effect.gen(function* () {
+                if (msg.refusal) {
+                  return yield* Effect.fail(
+                    new RefusalError({ refusal: msg.refusal }),
+                  );
+                }
+
+                return yield* Effect.fromNullable(msg.content);
+              }),
+            ),
+            Effect.flatMap(S.decodeUnknown(S.parseJson(params.schema))),
+          );
+        });
       },
 
       stream<F extends Readonly<ToolDefinitionAny[]>>(params: StreamParams<F>) {
         params = { ...defaultParams, ...params };
 
-        return HttpClientRequest.post("/v1/chat/completions").pipe(
-          HttpClientRequest.setHeader(
-            "Authorization",
-            `Bearer ${Redacted.value(params.apiKey)}`,
-          ),
-          HttpClientRequest.jsonBody({
-            model: params.model,
-            messages: messagesFromEvents(params.events),
-            max_tokens: params.maxTokens,
-            stream: true,
-            tools: params.tools ? gatherTools(params.tools) : undefined,
-            tool_choice: params.toolCall
-              ? getToolChoice(params.toolCall)
-              : undefined,
-            ...params.additionalParameters,
-          }),
-          Effect.flatMap(client),
-          Effect.flatMap(streamSSE),
-          Stream.unwrap,
-          filterParsedEvents,
-          Stream.filterMap((e) => decodeChatCompletionChunk(e.data)),
-          (stream) => {
-            let partialMessage = "";
-            const partialToolCalls = new Map<
-              number,
-              { id: string; name: string; arguments: string }
-            >();
+        return Effect.gen(function* () {
+          const apiKey = yield* Effect.fromNullable(params.apiKey).pipe(
+            Effect.map(Redacted.value),
+            Effect.mapError(
+              () => new MissingParameterError({ parameter: "apiKey" }),
+            ),
+          );
 
-            // TODO: Implement ContentStart, ToolCallStart, etc.
-            return Stream.mapConcat(stream, (event) => {
-              const choice = event.choices[0];
-              const content = choice.delta.content;
-              const toolCall = choice.delta.tool_calls?.at(0);
+          const model = yield* Effect.fromNullable(params.model).pipe(
+            Effect.mapError(
+              () => new MissingParameterError({ parameter: "model" }),
+            ),
+          );
 
-              const events: StreamEvent[] = [];
+          return HttpClientRequest.post("/v1/chat/completions").pipe(
+            HttpClientRequest.setHeader("Authorization", `Bearer ${apiKey}`),
+            HttpClientRequest.jsonBody({
+              model,
+              messages: messagesFromEvents(params.events),
+              max_tokens: params.maxTokens,
+              stream: true,
+              tools: params.tools ? gatherTools(params.tools) : undefined,
+              tool_choice: params.toolCall
+                ? getToolChoice(params.toolCall)
+                : undefined,
+              ...params.additionalParameters,
+            }),
+            Effect.flatMap(client),
+            Effect.flatMap(streamSSE),
+            Stream.unwrap,
+            filterParsedEvents,
+            Stream.filterMap((e) => decodeChatCompletionChunk(e.data)),
+            (stream) => {
+              let partialMessage = "";
+              const partialToolCalls = new Map<
+                number,
+                { id: string; name: string; arguments: string }
+              >();
 
-              if (content != null) {
-                partialMessage += content;
-                events.push(StreamEventEnum.Content({ content }));
-              }
+              // TODO: Implement ContentStart, ToolCallStart, etc.
+              return Stream.mapConcat(stream, (event) => {
+                const choice = event.choices[0];
+                const content = choice.delta.content;
+                const toolCall = choice.delta.tool_calls?.at(0);
 
-              if (toolCall != null) {
-                const tool = partialToolCalls.get(toolCall.index) ?? {
-                  id: "",
-                  name: "",
-                  arguments: "",
-                };
-                tool.id ||= toolCall.id ?? "";
-                tool.name ||= toolCall.function.name ?? "";
-                tool.arguments += toolCall.function.arguments;
-                partialToolCalls.set(toolCall.index, tool);
-              }
+                const events: StreamEvent[] = [];
 
-              if (choice.finish_reason != null || toolCall != null) {
-                if (partialMessage.length > 0) {
-                  events.push(
-                    StreamEventEnum.Message({
-                      message: new AssistantMessage({
-                        content: partialMessage,
+                if (content != null) {
+                  partialMessage += content;
+                  events.push(StreamEventEnum.Content({ content }));
+                }
+
+                if (toolCall != null) {
+                  const tool = partialToolCalls.get(toolCall.index) ?? {
+                    id: "",
+                    name: "",
+                    arguments: "",
+                  };
+                  tool.id ||= toolCall.id ?? "";
+                  tool.name ||= toolCall.function.name ?? "";
+                  tool.arguments += toolCall.function.arguments;
+                  partialToolCalls.set(toolCall.index, tool);
+                }
+
+                if (choice.finish_reason != null || toolCall != null) {
+                  if (partialMessage.length > 0) {
+                    events.push(
+                      StreamEventEnum.Message({
+                        message: new AssistantMessage({
+                          content: partialMessage,
+                        }),
                       }),
-                    }),
-                  );
-                  partialMessage = "";
+                    );
+                    partialMessage = "";
+                  }
                 }
-              }
 
-              if (choice.finish_reason != null) {
-                for (const tool of partialToolCalls.values()) {
-                  events.push(
-                    StreamEventEnum.ToolCall({
-                      id: tool.id,
-                      name: tool.name,
-                      arguments: tool.arguments,
-                    }),
-                  );
+                if (choice.finish_reason != null) {
+                  for (const tool of partialToolCalls.values()) {
+                    events.push(
+                      StreamEventEnum.ToolCall({
+                        id: tool.id,
+                        name: tool.name,
+                        arguments: tool.arguments,
+                      }),
+                    );
+                  }
                 }
-              }
 
-              return events;
-            });
-          },
-        );
+                return events;
+              });
+            },
+          );
+        }).pipe(Stream.unwrap);
       },
     };
   });

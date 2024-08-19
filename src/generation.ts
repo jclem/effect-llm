@@ -20,6 +20,7 @@ import {
 import { UnknownException } from "effect/Cause";
 import type { TaggedEnum } from "effect/Data";
 import { dual } from "effect/Function";
+import type { MissingParameterError } from "./providers/index.js";
 import {
   ToolResultErrorEvent,
   ToolResultSuccessEvent,
@@ -31,9 +32,9 @@ import {
 /** Parameters used to configure an LLM stream generation call. */
 export interface StreamParams<FnDefns extends Readonly<ToolDefinitionAny[]>> {
   /** A redacted API key */
-  readonly apiKey: Redacted.Redacted;
+  readonly apiKey?: Redacted.Redacted;
   /** The model to use for the completion request */
-  readonly model: string;
+  readonly model?: string;
   /** A system message, serialized differently depending on the provider */
   readonly system?: string | undefined;
   /** The events in the thread, typically messages and tool calls/results */
@@ -219,7 +220,7 @@ export interface Provider {
     params: StreamParams<any>,
   ) => Stream.Stream<
     StreamEvent,
-    HttpClientError | HttpBodyError | UnknownException,
+    HttpClientError | HttpBodyError | UnknownException | MissingParameterError,
     Scope.Scope
   >;
 }
@@ -362,6 +363,7 @@ export const streamTools: {
     | HttpClientError
     | HttpBodyError
     | UnknownException
+    | MissingParameterError
     | ToolExecutionError<unknown>
     | ToolDefinitionError<FnDefns[number]>,
     Scope.Scope | ToolDefinitionContext<FnDefns[number]>
@@ -376,6 +378,7 @@ export const streamTools: {
     | HttpClientError
     | HttpBodyError
     | UnknownException
+    | MissingParameterError
     | ToolExecutionError<unknown>
     | ToolDefinitionError<FnDefns[number]>,
     Scope.Scope | ToolDefinitionContext<FnDefns[number]>
@@ -393,6 +396,7 @@ export const streamTools: {
       | HttpClientError
       | HttpBodyError
       | UnknownException
+      | MissingParameterError
       | ToolExecutionError<unknown>
       | ToolDefinitionError<FnDefns[number]>,
       Scope.Scope | ToolDefinitionContext<FnDefns[number]>
@@ -415,6 +419,7 @@ export const streamTools: {
               | HttpClientError
               | HttpBodyError
               | UnknownException
+              | MissingParameterError
               | ToolExecutionError<unknown>
               | ToolDefinitionError<FnDefns[number]>,
           ) => Effect.promise(() => emit.fail(error));

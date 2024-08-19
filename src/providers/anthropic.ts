@@ -25,6 +25,7 @@ import {
 } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
+import { MissingParameterError, type DefaultParams } from "./index.js";
 
 export enum Model {
   Claude3Opus = "claude-3-opus-20240229",
@@ -91,17 +92,7 @@ type ContentBlockEvent = typeof AnthropicStreamEvent.Type;
 const decodeContentBlockEvent = S.decodeUnknownOption(AnthropicStreamEvent);
 
 export const make = (
-  defaultParams: Partial<
-    Pick<
-      StreamParams<readonly ToolDefinitionAny[]>,
-      | "apiKey"
-      | "model"
-      | "maxTokens"
-      | "maxIterations"
-      | "system"
-      | "additionalParameters"
-    >
-  > = {},
+  defaultParams: DefaultParams = {},
 ): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
@@ -127,18 +118,27 @@ export const make = (
         params = { ...defaultParams, ...params };
 
         return Effect.gen(function* () {
+          const apiKey = yield* Effect.fromNullable(params.apiKey).pipe(
+            Effect.map(Redacted.value),
+            Effect.mapError(
+              () => new MissingParameterError({ parameter: "apiKey" }),
+            ),
+          );
+
+          const model = yield* Effect.fromNullable(params.model).pipe(
+            Effect.mapError(
+              () => new MissingParameterError({ parameter: "model" }),
+            ),
+          );
           const toolChoice = params.toolCall
             ? yield* getToolChoice(params.toolCall)
             : undefined;
 
           return HttpClientRequest.post("/v1/messages").pipe(
-            HttpClientRequest.setHeader(
-              "X-API-Key",
-              Redacted.value(params.apiKey),
-            ),
+            HttpClientRequest.setHeader("X-API-Key", apiKey),
             HttpClientRequest.jsonBody({
               // TODO: Handle system messages
-              model: params.model,
+              model,
               system: params.system,
               messages: messagesFromEvents(params.events),
               max_tokens: params.maxTokens,
@@ -281,7 +281,6 @@ export const make = (
               : err,
           ),
           Stream.unwrap,
-          (x) => x,
         );
       },
     };
