@@ -429,7 +429,7 @@ const gatherTools = (tools: Readonly<ToolDefinitionAny[]>) =>
   }));
 
 class InvalidToolCallOptionError extends Data.TaggedError(
-  "InvalidFunctionCallOptionError",
+  "InvalidToolCallOptionError",
 )<{
   readonly option: unknown;
   readonly reason: string;
