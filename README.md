@@ -32,8 +32,14 @@ const program = Effect.gen(function* () {
   });
 
   const responseText = yield* stream.pipe(
-    Stream.filter((event) => event._tag === "Content"),
-    Stream.runFold("", (acc, event) => acc + event.content),
+    Stream.filterMap(
+      Match.type<StreamEvent>().pipe(
+        Match.tag("Content", (event) => Option.some(event.content)),
+        Match.orElse(() => Option.none()),
+      ),
+    ),
+    Stream.mkString,
+    Effect.scoped,
   );
 
   yield* Console.log("The model says:", responseText);
@@ -56,7 +62,7 @@ const program = Effect.gen(function* () {
   const provider = yield* Generation.Generation;
 
   const stream = Generation.stream(provider, {
-    apiKey,
+    apiKey: yield* apiKey,
     model: Providers.Anthropic.Model.Claude35Sonnet,
     maxTokens: 512,
     events: [
@@ -67,8 +73,14 @@ const program = Effect.gen(function* () {
   });
 
   const responseText = yield* stream.pipe(
-    Stream.filter((event) => event._tag === "Content"),
-    Stream.runFold("", (acc, event) => acc + event.content),
+    Stream.filterMap(
+      Match.type<StreamEvent>().pipe(
+        Match.tag("Content", (event) => Option.some(event.content)),
+        Match.orElse(() => Option.none()),
+      ),
+    ),
+    Stream.mkString,
+    Effect.scoped,
   );
 
   yield* Console.log("The model says:", responseText);
@@ -133,7 +145,116 @@ The stream returned by `Generation.streamTools` emits the same events as
 | `FunctionResultSuccess` | `{ readonly id: string; readonly name: string; readonly result: unknown }`    | Emitted when a function call's arguments are invalid or the function call is not in the defined functions |
 | `FunctionResultError`   | `{ readonly id: string; readonly name: string; readonly result: unknown }`    | Emitted when a function call's arguments are invalid or the function call is not in the defined functions |
 
+### Defining Functions
+
+To define a function for use with `Generation.streamTools`[^2], use the
+`Generation.defineFunction` function:
+
+```typescript
+const apiKey = Config.redacted("ANTHROPIC_API_KEY");
+
+const program = Effect.gen(function* () {
+  const provider = yield* Generation.Generation;
+
+  const sayHello = Generation.defineFunction("sayHello", {
+    description: "Say hello to the user",
+    input: Schema.Struct({ name: Schema.String }),
+    function: (functionCallID, functionArguments) =>
+      Console.log(`Hello, ${functionArguments.name}`).pipe(
+        Effect.as({ ok: true }),
+      ),
+  });
+
+  const stream = Generation.streamTools(provider, {
+    apiKey: yield* apiKey,
+    model: Providers.Anthropic.Model.Claude35Sonnet,
+    maxTokens: 512,
+    functions: [sayHello],
+    events: [
+      new Thread.UserMessage({
+        content: "Hello, I'm Jonathan.",
+      }),
+    ],
+  });
+
+  yield* stream.pipe(Stream.runDrain, Effect.scoped);
+});
+
+program.pipe(
+  Effect.provide(Layer.effect(Generation.Generation, Anthropic.make())),
+  Effect.provide(HttpClient.layer),
+  Effect.provide(BunContext.layer),
+  BunRuntime.runMain,
+);
+```
+
+#### Error Handling
+
+Any errors that occur during function execution will _halt_ the stream and yield
+a `FunctionExecutionError`. In order to handle an error and report it to the
+model, you should instead fail the effect with a `FunctionError` using the
+`Generation.functionError` function:
+
+```typescript
+const sayHello = Generation.defineFunction("sayHello", {
+  description: "Say hello to the user",
+  input: Schema.Struct({ name: Schema.String }),
+  function: (functionCallID, functionArguments) =>
+    Console.log(`Hello, ${functionArguments.name}`).pipe(
+      Effect.catchAll((err) =>
+        Generation.functionError({
+          message: "An error occurred while saying hello",
+          error: err,
+        }),
+      ),
+      Effect.as({ ok: true }),
+    ),
+});
+```
+
+You can also fail mid-effect, since `Generation.functionError` actually fails the effect:
+
+```typescript
+const sayHello = Generation.defineFunction("sayHello", {
+  description: "Say hello to the user",
+  input: Schema.Struct({ name: Schema.String }),
+  function: (functionCallID, functionArguments) =>
+    Effect.gen(function* () {
+      return yield* Generation.functionError("Whoops!");
+    }),
+});
+```
+
+The payload passed to `Generation.functionError` can be any value, and it is
+serialized as JSON and sent to the model, which is notified that an error
+occurred.
+
+#### Halting Early
+
+If you want to halt the iteration loop eraly, you can use the
+`Generation.haltToolLoop` function:
+
+```typescript
+const sayHello = Generation.defineFunction("sayHello", {
+  description: "Say hello to the user",
+  input: Schema.Struct({ name: Schema.String }),
+  function: (functionCallID, functionArguments) =>
+    Effect.gen(function* () {
+      return yield* Generation.haltToolLoop();
+    }),
+});
+```
+
+This will immediately halt the loop before executing any other function calls
+returned by the model in that same loop, and will yield end the stream without
+an error.
+
 [^1]:
     There are some caveats to this—for example, the `stream` API doesn't require
     the `maxTokens` parameter, because OpenAI doesn't require it, but the Anthropic
     API will return a 400 if it's not provided.
+
+[^2]:
+    You can also use `Generation.defineFunction` with `Generation.stream`,
+    because currently, it uses the same parameter type, but doesn't actually
+    validate or execute the function calls.
