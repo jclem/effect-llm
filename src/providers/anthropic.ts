@@ -276,7 +276,7 @@ export const make = (
           );
         }).pipe(
           Effect.mapError((err) =>
-            err instanceof InvalidFunctionCallOptionError
+            err instanceof InvalidToolCallOptionError
               ? new UnknownException(err)
               : err,
           ),
@@ -428,7 +428,7 @@ const gatherTools = (tools: Readonly<ToolDefinitionAny[]>) =>
     input_schema: JSONSchema.make(tool.input),
   }));
 
-class InvalidFunctionCallOptionError extends Data.TaggedError(
+class InvalidToolCallOptionError extends Data.TaggedError(
   "InvalidFunctionCallOptionError",
 )<{
   readonly option: unknown;
@@ -453,7 +453,7 @@ const getToolChoice = (
         return { type: "any" };
       default:
         return yield* Effect.fail(
-          new InvalidFunctionCallOptionError({
+          new InvalidToolCallOptionError({
             option: toolCall,
             reason: "Not supported.",
           }),
