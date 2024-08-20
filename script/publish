@@ -7,10 +7,6 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-if [ -d dist ]; then
-  rm -r dist
-fi
-
 bun run check
 bunx unbuild
 
