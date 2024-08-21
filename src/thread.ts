@@ -54,20 +54,24 @@ export class ToolUseEvent<Name extends string, Input> extends Data.TaggedClass(
 /**
  * The result of a successful tool invocation
  */
-export class ToolResultSuccessEvent<Output> extends Data.TaggedClass(
-  "ToolResultSuccessEvent",
-)<{
+export class ToolResultSuccessEvent<
+  Name extends string,
+  Output,
+> extends Data.TaggedClass("ToolResultSuccessEvent")<{
   readonly id: string;
+  readonly name: Name;
   readonly result: Output;
 }> {}
 
 /**
  * The result of an unsuccessful tool invocation
  */
-export class ToolResultErrorEvent<Output> extends Data.TaggedClass(
-  "ToolResultErrorEvent",
-)<{
+export class ToolResultErrorEvent<
+  Name extends string,
+  Output,
+> extends Data.TaggedClass("ToolResultErrorEvent")<{
   readonly id: string;
+  readonly name: Name;
   readonly result: Output;
 }> {}
 
@@ -79,5 +83,5 @@ export type ThreadEvent =
   | AssistantMessage
   | SystemMessage
   | ToolUseEvent<string, unknown>
-  | ToolResultSuccessEvent<unknown>
-  | ToolResultErrorEvent<unknown>;
+  | ToolResultSuccessEvent<string, unknown>
+  | ToolResultErrorEvent<string, unknown>;

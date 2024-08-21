@@ -536,6 +536,7 @@ export const streamTools: {
 
               const failedToolResult = new ToolResultErrorEvent({
                 id: error.toolCall.id,
+                name: error.toolCall.name,
                 result: error.message,
               });
 
@@ -602,6 +603,7 @@ export const streamTools: {
                 newEvents.push(
                   new ToolResultSuccessEvent({
                     id: fnCall.id,
+                    name: fnCall.name,
                     result: output.right as unknown,
                   }),
                 );
@@ -617,6 +619,7 @@ export const streamTools: {
                 newEvents.push(
                   new ToolResultErrorEvent({
                     id: fnCall.id,
+                    name: fnCall.name,
                     result: output.left.payload as unknown,
                   }),
                 );

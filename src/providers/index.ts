@@ -2,6 +2,7 @@ import { Data } from "effect";
 import type { StreamParams, ToolDefinitionAny } from "../generation.js";
 
 export * as Anthropic from "./anthropic.js";
+export * as Google from "./google.js";
 export * as OpenAI from "./openai.js";
 
 /**
@@ -13,7 +14,7 @@ export * as OpenAI from "./openai.js";
 export class MissingParameterError extends Data.TaggedError(
   "MissingParameterError",
 )<{
-  parameter: keyof StreamParams<readonly ToolDefinitionAny[]>;
+  parameter: string;
 }> {}
 
 export type DefaultParams = Partial<
