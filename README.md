@@ -102,18 +102,21 @@ configuration options, and the second are the optional default parameters that
 the other providers accept, as well:
 
 ```typescript
-Google.make({
-  // Required.
-  serviceEndpoint: "https://us-central1-aiplatform.googleapis.com"
-}, {
-  system: "Be courteous."
-})
+Google.make(
+  {
+    // Required.
+    serviceEndpoint: "https://us-central1-aiplatform.googleapis.com",
+  },
+  {
+    system: "Be courteous.",
+  },
+);
 ```
 
 Secondly, the "model" parameter must be the full model path parameter in this format:
 
 ```typescript
-"projects/${projectID}/locations/${locationID}/publishers/${publisher}/models/${modelName}"
+"projects/${projectID}/locations/${locationID}/publishers/${publisher}/models/${modelName}";
 ```
 
 ## Tool-Calling
