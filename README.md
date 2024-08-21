@@ -117,8 +117,8 @@ Secondly, the "model" parameter must be the full model path parameter in this fo
 
 ```typescript
 const params = {
-  model: `projects/${projectID}/locations/${locationID}/publishers/${publisher}/models/${modelName}`
-}
+  model: `projects/${projectID}/locations/${locationID}/publishers/${publisher}/models/${modelName}`,
+};
 ```
 
 ## Tool-Calling
