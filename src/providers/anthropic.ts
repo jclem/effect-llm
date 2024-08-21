@@ -25,7 +25,11 @@ import {
 } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
-import { MissingParameterError, type DefaultParams } from "./index.js";
+import {
+  mergeParams,
+  MissingParameterError,
+  type DefaultParams,
+} from "./index.js";
 
 export enum Model {
   Claude3Opus = "claude-3-opus-20240229",
@@ -91,8 +95,12 @@ const AnthropicStreamEvent = S.Union(
 type ContentBlockEvent = typeof AnthropicStreamEvent.Type;
 const decodeContentBlockEvent = S.decodeUnknownOption(AnthropicStreamEvent);
 
+interface Config {
+  defaultParams?: DefaultParams;
+}
+
 export const make = (
-  defaultParams: DefaultParams = {},
+  config: Config = {},
 ): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
@@ -115,7 +123,7 @@ export const make = (
 
     return {
       stream<F extends Readonly<ToolDefinitionAny[]>>(params: StreamParams<F>) {
-        params = { ...defaultParams, ...params };
+        params = mergeParams(config.defaultParams, params);
 
         return Effect.gen(function* () {
           const apiKey = yield* Effect.fromNullable(params.apiKey).pipe(

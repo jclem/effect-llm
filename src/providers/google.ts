@@ -19,11 +19,11 @@ import {
 } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import type { ThreadEvent } from "../thread.js";
-import { MissingParameterError, type DefaultParams } from "./index.js";
-
-interface GoogleProviderConfig {
-  serviceEndpoint: string;
-}
+import {
+  mergeParams,
+  MissingParameterError,
+  type DefaultParams,
+} from "./index.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TaggedPart = <T extends string, S extends S.Struct<any>>(
@@ -102,6 +102,11 @@ const ContentResponse = S.Struct({
 
 const decodeEvent = S.decodeUnknownOption(S.parseJson(ContentResponse));
 
+interface Config {
+  serviceEndpoint: string;
+  defaultParams?: DefaultParams;
+}
+
 /**
  * Provides a Google AI client as a Provider for streaming generation.
  *
@@ -110,8 +115,7 @@ const decodeEvent = S.decodeUnknownOption(S.parseJson(ContentResponse));
  * @returns An Effect that produces a Provider
  */
 export const make = (
-  config: GoogleProviderConfig,
-  defaultParams: DefaultParams = {},
+  config: Config,
 ): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
   Effect.sync(function () {
     const client = HttpClient.fetchOk.pipe(
@@ -125,7 +129,7 @@ export const make = (
 
     return {
       stream<F extends Readonly<ToolDefinitionAny[]>>(params: StreamParams<F>) {
-        params = { ...defaultParams, ...params };
+        params = mergeParams(config.defaultParams, params);
 
         return Effect.gen(function* () {
           const apiKey = yield* Effect.fromNullable(params.apiKey).pipe(

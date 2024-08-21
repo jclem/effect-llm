@@ -6,7 +6,6 @@ import {
 import { JSONSchema, Schema as S } from "@effect/schema";
 import { Array, Data, Effect, Match, Option, Redacted, Stream } from "effect";
 import type {
-  Provider,
   StreamEvent,
   ToolCallOption,
   ToolDefinitionAny,
@@ -14,7 +13,11 @@ import type {
 import { StreamEventEnum, type StreamParams } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
-import { MissingParameterError, type DefaultParams } from "./index.js";
+import {
+  mergeParams,
+  MissingParameterError,
+  type DefaultParams,
+} from "./index.js";
 
 export enum Model {
   GPT4Turbo = "gpt-4-turbo",
@@ -86,9 +89,11 @@ export class RefusalError extends Data.TaggedError("RefusalError")<{
   readonly refusal: string;
 }> {}
 
-export const make = (
-  defaultParams: DefaultParams = {},
-): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
+interface Config {
+  defaultParams?: DefaultParams;
+}
+
+export const make = (config: Config = {}) =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient.pipe(
       Effect.map(HttpClient.filterStatusOk),
@@ -108,7 +113,7 @@ export const make = (
 
     return {
       structured<A, I, R>(params: StructuredParams<A, I, R>) {
-        params = { ...defaultParams, ...params };
+        params = mergeParams(config.defaultParams, params);
 
         return Effect.gen(function* () {
           const apiKey = yield* Effect.fromNullable(params.apiKey).pipe(
@@ -160,7 +165,7 @@ export const make = (
       },
 
       stream<F extends Readonly<ToolDefinitionAny[]>>(params: StreamParams<F>) {
-        params = { ...defaultParams, ...params };
+        params = mergeParams(config.defaultParams, params);
 
         return Effect.gen(function* () {
           const apiKey = yield* Effect.fromNullable(params.apiKey).pipe(
