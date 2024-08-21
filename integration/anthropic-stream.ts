@@ -4,6 +4,7 @@ import { Schema as S } from "@effect/schema";
 import { Config, Console, Effect, Layer, Stream } from "effect";
 import { Generation, Thread } from "../src";
 import * as Anthropic from "../src/providers/anthropic";
+import { TextChunk } from "../src/thread";
 
 Effect.gen(function* () {
   const llm = yield* Generation.Generation;
@@ -15,8 +16,12 @@ Effect.gen(function* () {
     maxTokens: 256,
     events: [
       new Thread.UserMessage({
-        content:
-          "Say hello with TEXT only (not a tool), and then use a tool to say 'Greetings'",
+        content: [
+          new TextChunk({
+            content:
+              "Say hello with TEXT only (not a tool), and then use a tool to say 'Greetings'",
+          }),
+        ],
       }),
     ],
     tools: [

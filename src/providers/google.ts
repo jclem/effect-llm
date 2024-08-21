@@ -18,7 +18,7 @@ import {
   type ToolDefinitionAny,
 } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
-import type { ThreadEvent } from "../thread.js";
+import type { ContentChunk, ThreadEvent } from "../thread.js";
 import { MissingParameterError, type DefaultParams } from "./index.js";
 import { mergeParams } from "./internal.js";
 
@@ -42,6 +42,25 @@ const TextPart = S.transform(
   },
 );
 
+type TextPart = S.Schema.Type<typeof TextPart>;
+
+const BlobPartInternal = S.Struct({
+  mimeType: S.String,
+  data: S.String,
+});
+
+const BlobPart = S.transform(
+  BlobPartInternal,
+  TaggedPart(BlobPartInternal, "Blob"),
+  {
+    strict: true,
+    decode: (value) => ({ ...value, _tag: "Blob" as const }),
+    encode: (value) => value,
+  },
+);
+
+type BlobPart = S.Schema.Type<typeof BlobPart>;
+
 const FunctionCallPartInternal = S.Struct({
   functionCall: S.Struct({
     name: S.String,
@@ -58,6 +77,8 @@ const FunctionCallPart = S.transform(
     encode: (value) => value,
   },
 );
+
+type FunctionCallPart = S.Schema.Type<typeof FunctionCallPart>;
 
 const FunctionResponsePartInternal = S.Struct({
   functionResponse: S.Struct({
@@ -78,7 +99,14 @@ const FunctionResponsePart = S.transform(
   },
 );
 
-const Part = S.Union(TextPart, FunctionCallPart, FunctionResponsePart);
+type FunctionResponsePart = S.Schema.Type<typeof FunctionResponsePart>;
+
+const Part = S.Union(
+  TextPart,
+  BlobPart,
+  FunctionCallPart,
+  FunctionResponsePart,
+);
 
 type Part = S.Schema.Type<typeof Part>;
 
@@ -290,6 +318,24 @@ const getToolChoice = (
   }
 };
 
+const partsFromChunks = (chunks: ContentChunk[]) =>
+  chunks.map<Part>(
+    Match.typeTags<ContentChunk>()({
+      TextChunk: (chunk) =>
+        ({
+          _tag: "Text",
+          text: chunk.content,
+        }) satisfies TextPart,
+
+      ImageChunk: (chunk) =>
+        ({
+          _tag: "Blob",
+          mimeType: chunk.mimeType,
+          data: chunk.content,
+        }) satisfies BlobPart,
+    }),
+  );
+
 const contentsFromEvents = pipe(
   Array.reduce<Content[], ThreadEvent>([], (contents, event) =>
     Match.type<ThreadEvent>().pipe(
@@ -297,7 +343,7 @@ const contentsFromEvents = pipe(
         UserMessage: (message) =>
           contents.concat({
             role: "user",
-            parts: [{ _tag: "Text", text: message.content }],
+            parts: partsFromChunks(message.content),
           }),
         AssistantMessage: (message) =>
           contents.concat({

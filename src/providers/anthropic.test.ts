@@ -3,7 +3,7 @@ import { BunContext } from "@effect/platform-bun";
 import { Chunk, Effect, Layer, Match, Option, Redacted, Stream } from "effect";
 import type { StreamEvent } from "../generation.js";
 import { describe, expect, it } from "../testing.js";
-import { UserMessage } from "../thread.js";
+import { TextChunk, UserMessage } from "../thread.js";
 import { Anthropic } from "./index.js";
 
 const setup = <A, E, R>(self: Effect.Effect<A, E, R>) =>
@@ -28,7 +28,11 @@ describe("Anthropic", () => {
           .stream({
             apiKey: Redacted.make("api-key"),
             model: Anthropic.Model.Claude35Sonnet,
-            events: [new UserMessage({ content: "Hello." })],
+            events: [
+              new UserMessage({
+                content: [new TextChunk({ content: "Hello." })],
+              }),
+            ],
           })
           .pipe(
             Stream.filterMap(
@@ -69,7 +73,11 @@ data: { "type": "content_block_stop", "index": 0 }\n\n`),
           .stream({
             apiKey: Redacted.make("api-key"),
             model: Anthropic.Model.Claude35Sonnet,
-            events: [new UserMessage({ content: "Hello." })],
+            events: [
+              new UserMessage({
+                content: [new TextChunk({ content: "Hello." })],
+              }),
+            ],
           })
           .pipe(
             Stream.filter((e) => e._tag === "ToolCall"),
@@ -113,7 +121,11 @@ data: { "type": "content_block_stop", "index": 0 }\n\n`),
           .stream({
             apiKey: Redacted.make("api-key"),
             model: Anthropic.Model.Claude35Sonnet,
-            events: [new UserMessage({ content: "Hello." })],
+            events: [
+              new UserMessage({
+                content: [new TextChunk({ content: "Hello" })],
+              }),
+            ],
           })
           .pipe(Stream.runDrain);
       }).pipe(

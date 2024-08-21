@@ -12,7 +12,12 @@ import type {
 } from "../generation.js";
 import { StreamEventEnum, type StreamParams } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
-import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
+import {
+  AssistantMessage,
+  Role,
+  type ContentChunk,
+  type ThreadEvent,
+} from "../thread.js";
 import { MissingParameterError, type DefaultParams } from "./index.js";
 import { mergeParams } from "./internal.js";
 
@@ -294,6 +299,23 @@ const getToolChoice = (
   }
 };
 
+const partsFromContent = (chunks: ContentChunk[]) =>
+  chunks.map(
+    Match.typeTags<ContentChunk>()({
+      TextChunk: (chunk) => ({
+        type: "text",
+        text: chunk.content,
+      }),
+
+      ImageChunk: (chunk) => ({
+        type: "image",
+        image_url: {
+          url: chunk.content,
+        },
+      }),
+    }),
+  );
+
 const messagesFromEvents = Array.filterMap(
   Match.type<ThreadEvent>().pipe(
     Match.tagsExhaustive({
@@ -305,7 +327,7 @@ const messagesFromEvents = Array.filterMap(
       UserMessage: (message) =>
         Option.some({
           role: Role.User,
-          content: message.content,
+          content: partsFromContent(message.content),
         }),
       AssistantMessage: (message) =>
         Option.some({

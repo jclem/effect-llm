@@ -26,7 +26,7 @@ const program = Effect.gen(function* () {
     maxTokens: 512,
     events: [
       new Thread.UserMessage({
-        content: "Hello, I'm Jonathan.",
+        content: [new TextChunk({ content: "Hello, I'm Jonathan." })],
       }),
     ],
   });
@@ -80,7 +80,7 @@ const program = Effect.gen(function* () {
     maxTokens: 512,
     events: [
       new Thread.UserMessage({
-        content: "Hello, I'm Jonathan.",
+        content: [new TextChunk({ content: "Hello, I'm Jonathan." })],
       }),
     ],
   });
@@ -202,7 +202,7 @@ const program = Effect.gen(function* () {
     tools: [sayHello],
     events: [
       new Thread.UserMessage({
-        content: "Hello, I'm Jonathan.",
+        content: [new TextChunk({ content: "Hello, I'm Jonathan." })],
       }),
     ],
   });

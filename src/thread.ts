@@ -1,6 +1,38 @@
 import { Data } from "effect";
 
 /**
+ * A portion of a message's content representing plaintext
+ */
+export class TextChunk extends Data.TaggedClass("TextChunk")<{
+  readonly content: string;
+}> {}
+
+/**
+ * The type of data in an ImageChunk
+ */
+export enum ImageType {
+  Base64 = "base64",
+  URL = "url",
+}
+
+/**
+ * A portion of a message's content representing an image
+ */
+export class ImageChunk extends Data.TaggedClass("ImageChunk")<{
+  /** The type of image data this represents */
+  readonly dataType: ImageType;
+  /** The MIME type of the image */
+  readonly mimeType: string;
+  /** The actual content depending on the dataType */
+  readonly content: string;
+}> {}
+
+/**
+ * A portion of a message's content
+ */
+export type ContentChunk = TextChunk | ImageChunk;
+
+/**
  * The entity that a message is attributed to
  */
 export enum Role {
@@ -13,7 +45,7 @@ export enum Role {
  * A message that was sent by a user
  */
 export class UserMessage extends Data.TaggedClass("UserMessage")<{
-  readonly content: string;
+  readonly content: ContentChunk[];
 }> {
   readonly role = Role.User;
 }

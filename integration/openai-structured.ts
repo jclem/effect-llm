@@ -4,6 +4,7 @@ import { Schema as S } from "@effect/schema";
 import { Config, Effect } from "effect";
 import { Thread } from "../src";
 import { OpenAI } from "../src/providers";
+import { TextChunk } from "../src/thread";
 
 const schema = S.Struct({
   name: S.String,
@@ -26,7 +27,9 @@ Effect.gen(function* () {
             "Extract the user's information from the given user message.",
         }),
         new Thread.UserMessage({
-          content: "I am Jonathan, I am 10 years old.",
+          content: [
+            new TextChunk({ content: "I am Jonathan, I am 10 years old." }),
+          ],
         }),
       ],
       schema,

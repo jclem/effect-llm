@@ -4,6 +4,7 @@ import { Schema as S } from "@effect/schema";
 import { Config, Console, Effect, Layer, Stream } from "effect";
 import { Generation, Thread } from "../src";
 import * as Google from "../src/providers/google";
+import { TextChunk } from "../src/thread";
 
 Effect.gen(function* () {
   const llm = yield* Generation.Generation;
@@ -16,8 +17,12 @@ Effect.gen(function* () {
     maxTokens: 256,
     events: [
       new Thread.UserMessage({
-        content:
-          "Say hello with TEXT only (not a function), and then use a function to say 'Greetings'",
+        content: [
+          new TextChunk({
+            content:
+              "Say hello with TEXT only (not a function), and then use a function to say 'Greetings'",
+          }),
+        ],
       }),
     ],
     tools: [

@@ -24,7 +24,12 @@ import {
   type StreamParams,
 } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
-import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
+import {
+  AssistantMessage,
+  Role,
+  type ContentChunk,
+  type ThreadEvent,
+} from "../thread.js";
 import { MissingParameterError, type DefaultParams } from "./index.js";
 import { mergeParams } from "./internal.js";
 
@@ -291,17 +296,22 @@ export const make = (
     };
   });
 
+type AnthropicContentPart =
+  | { type: "text"; text: string }
+  | {
+      type: "image";
+      source: { type: "base64"; media_type: string; data: string };
+    }
+  | {
+      type: "tool_result";
+      tool_use_id: string;
+      is_error: boolean;
+      content: string;
+    };
+
 type AnthropicUserMessage = {
   role: Role.User;
-  content: (
-    | { type: "text"; text: string }
-    | {
-        type: "tool_result";
-        tool_use_id: string;
-        is_error: boolean;
-        content: string;
-      }
-  )[];
+  content: AnthropicContentPart[];
 };
 
 type AnthropicAssistantMessage = {
@@ -314,6 +324,25 @@ type AnthropicAssistantMessage = {
 
 type Message = AnthropicUserMessage | AnthropicAssistantMessage;
 
+const contentFromChunks = (chunks: ContentChunk[]) =>
+  chunks.map<AnthropicContentPart>(
+    Match.typeTags<ContentChunk>()({
+      TextChunk: (chunk) => ({
+        type: "text" as const,
+        text: chunk.content,
+      }),
+
+      ImageChunk: (chunk) => ({
+        type: "image" as const,
+        source: {
+          type: "base64" as const,
+          media_type: chunk.mimeType,
+          data: chunk.content,
+        },
+      }),
+    }),
+  );
+
 const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
   [],
   (messages, event) =>
@@ -325,15 +354,14 @@ const messagesFromEvents = Array.reduce<Message[], ThreadEvent>(
           if (lastMessage?.role === Role.User) {
             return messages.slice(0, -1).concat({
               ...lastMessage,
-              content: lastMessage.content.concat({
-                type: "text",
-                text: message.content,
-              }),
+              content: lastMessage.content.concat(
+                contentFromChunks(message.content),
+              ),
             });
           } else {
             return messages.concat({
               role: Role.User,
-              content: [{ type: "text", text: message.content }],
+              content: contentFromChunks(message.content),
             });
           }
         },
