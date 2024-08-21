@@ -116,7 +116,9 @@ Google.make(
 Secondly, the "model" parameter must be the full model path parameter in this format:
 
 ```typescript
-"projects/${projectID}/locations/${locationID}/publishers/${publisher}/models/${modelName}";
+const params = {
+  model: `projects/${projectID}/locations/${locationID}/publishers/${publisher}/models/${modelName}`
+}
 ```
 
 ## Tool-Calling
