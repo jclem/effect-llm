@@ -106,18 +106,13 @@ export const make = (
   config: GoogleProviderConfig,
   defaultParams: DefaultParams = {},
 ): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
-  Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient.pipe(
-      Effect.map(HttpClient.filterStatusOk),
-      Effect.map(
-        HttpClient.mapRequest(
-          HttpClientRequest.prependUrl(config.serviceEndpoint),
-        ),
+  Effect.sync(function () {
+    const client = HttpClient.fetchOk.pipe(
+      HttpClient.mapRequest(
+        HttpClientRequest.prependUrl(config.serviceEndpoint),
       ),
-      Effect.map(
-        HttpClient.mapRequest(
-          HttpClientRequest.setHeader("content-type", "text/event-stream"),
-        ),
+      HttpClient.mapRequest(
+        HttpClientRequest.setHeader("content-type", "text/event-stream"),
       ),
     );
 
