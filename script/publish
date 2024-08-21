@@ -8,6 +8,7 @@ if [ -z "$1" ]; then
 fi
 
 bun run check
+bun test
 bunx unbuild
 
 npm version "$1"
