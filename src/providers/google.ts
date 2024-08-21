@@ -19,11 +19,8 @@ import {
 } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import type { ThreadEvent } from "../thread.js";
-import {
-  mergeParams,
-  MissingParameterError,
-  type DefaultParams,
-} from "./index.js";
+import { MissingParameterError, type DefaultParams } from "./index.js";
+import { mergeParams } from "./internal.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TaggedPart = <T extends string, S extends S.Struct<any>>(

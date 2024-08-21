@@ -25,11 +25,8 @@ import {
 } from "../generation.js";
 import { filterParsedEvents, streamSSE } from "../sse.js";
 import { AssistantMessage, Role, type ThreadEvent } from "../thread.js";
-import {
-  mergeParams,
-  MissingParameterError,
-  type DefaultParams,
-} from "./index.js";
+import { MissingParameterError, type DefaultParams } from "./index.js";
+import { mergeParams } from "./internal.js";
 
 export enum Model {
   Claude3Opus = "claude-3-opus-20240229",
