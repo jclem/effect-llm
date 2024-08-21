@@ -139,18 +139,11 @@ export const make = (
             ),
           );
 
-          return HttpClientRequest.post(
+          return yield* HttpClientRequest.post(
             `/v1/${model}:streamGenerateContent?alt=sse`,
           ).pipe(
             HttpClientRequest.setHeader("Authorization", `Bearer ${apiKey}`),
-            HttpClientRequest.schemaBody(
-              S.Struct({
-                contents: S.Array(Content),
-                tools: S.Any,
-                toolConfig: S.Any,
-                systemInstruction: S.Any,
-              }),
-            )({
+            HttpClientRequest.schemaBody(RequestBody)({
               contents: contentsFromEvents(params.events),
               tools: params.tools ? gatherTools(params.tools) : undefined,
               toolConfig: params.toolCall
@@ -159,41 +152,42 @@ export const make = (
               systemInstruction: params.system
                 ? {
                     role: "user",
-                    parts: [{ text: params.system }],
+                    parts: [{ _tag: "Text", text: params.system }],
                   }
                 : undefined,
             }),
             Effect.flatMap(client),
             Effect.flatMap(streamSSE),
-            Stream.unwrap,
-            filterParsedEvents,
-            Stream.filterMap((e) => decodeEvent(e.data)),
-            Stream.filterMap((resp) =>
-              Option.fromNullable(resp.candidates.at(0)?.content.parts),
-            ),
-            Stream.mapConcat(
-              Array.filterMap(
-                Match.type<Part>().pipe(
-                  Match.tags({
-                    Text: (part) =>
-                      Option.some(
-                        StreamEventEnum.Content({ content: part.text }),
-                      ),
-                    FunctionCall: (part) =>
-                      Option.some(
-                        StreamEventEnum.ToolCall({
-                          id: crypto.randomUUID(),
-                          name: part.functionCall.name,
-                          arguments: JSON.stringify(part.functionCall.args),
-                        }),
-                      ),
-                  }),
-                  Match.orElse(Function.constant(Option.none())),
-                ),
+          );
+        }).pipe(
+          Stream.unwrap,
+          filterParsedEvents,
+          Stream.filterMap((e) => decodeEvent(e.data)),
+          Stream.filterMap((resp) =>
+            Option.fromNullable(resp.candidates.at(0)?.content.parts),
+          ),
+          Stream.mapConcat(
+            Array.filterMap(
+              Match.type<Part>().pipe(
+                Match.tags({
+                  Text: (part) =>
+                    Option.some(
+                      StreamEventEnum.Content({ content: part.text }),
+                    ),
+                  FunctionCall: (part) =>
+                    Option.some(
+                      StreamEventEnum.ToolCall({
+                        id: crypto.randomUUID(),
+                        name: part.functionCall.name,
+                        arguments: JSON.stringify(part.functionCall.args),
+                      }),
+                    ),
+                }),
+                Match.orElse(Function.constant(Option.none())),
               ),
             ),
-          );
-        }).pipe(Stream.unwrap);
+          ),
+        );
       },
     };
   });
@@ -236,6 +230,28 @@ enum FunctionCallingMode {
   Any,
   None,
 }
+
+const RequestBody = S.Struct({
+  contents: S.Array(Content),
+  tools: S.Array(
+    S.Struct({
+      functionDeclarations: S.Array(
+        S.Struct({
+          name: S.String,
+          description: S.String.pipe(S.optional),
+          parameters: S.Unknown,
+        }),
+      ),
+    }),
+  ).pipe(S.optional),
+  toolConfig: S.Struct({
+    functionCallingConfig: S.Struct({
+      mode: S.Enums(FunctionCallingMode),
+      allowedFunctionNames: S.Array(S.String).pipe(S.optional),
+    }),
+  }).pipe(S.optional),
+  systemInstruction: Content.pipe(S.optional),
+});
 
 const getToolChoice = (
   toolCall: ToolCallOption<Readonly<ToolDefinitionAny[]>>,
