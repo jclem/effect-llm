@@ -102,6 +102,13 @@ const ContentResponse = S.Struct({
 
 const decodeEvent = S.decodeUnknownOption(S.parseJson(ContentResponse));
 
+/**
+ * Provides a Google AI client as a Provider for streaming generation.
+ *
+ * @param config - Configuration for the Google AI provider
+ * @param defaultParams - Default parameters to use for requests
+ * @returns An Effect that produces a Provider
+ */
 export const make = (
   config: GoogleProviderConfig,
   defaultParams: DefaultParams = {},

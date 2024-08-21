@@ -93,6 +93,29 @@ program.pipe(
 );
 ```
 
+## Using the Google Provider
+
+In order to use the Google Provider, you'll need to keep two things in mind:
+
+The `Google.make` function accepts two parameters. The first are Google-specific
+configuration options, and the second are the optional default parameters that
+the other providers accept, as well:
+
+```typescript
+Google.make({
+  // Required.
+  serviceEndpoint: "https://us-central1-aiplatform.googleapis.com"
+}, {
+  system: "Be courteous."
+})
+```
+
+Secondly, the "model" parameter must be the full model path parameter in this format:
+
+```typescript
+"projects/${projectID}/locations/${locationID}/publishers/${publisher}/models/${modelName}"
+```
+
 ## Tool-Calling
 
 There are two ways of utilizing LLM tools in this library.
