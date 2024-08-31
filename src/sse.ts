@@ -1,81 +1,30 @@
 import { HttpClientResponse } from "@effect/platform";
 import type { ResponseError } from "@effect/platform/HttpClientError";
-import { Data, Effect, Exit, Match, Queue, Stream } from "effect";
-import { UnknownException } from "effect/Cause";
-import {
-  createParser,
-  type ParsedEvent,
-  type ParseEvent,
-} from "eventsource-parser";
-
-type SSEQueueEvent = Data.TaggedEnum<{
-  Event: { readonly event: ParseEvent };
-  Error: { readonly error: ResponseError | UnknownException };
-}>;
-
-const SSEQueueEvent = Data.taggedEnum<SSEQueueEvent>();
+import { Effect, Stream } from "effect";
+import { createParser, type ParseEvent } from "eventsource-parser";
 
 /**
  * Read a client response as a stream of server-sent events.
  */
-export const streamSSE = (response: HttpClientResponse.HttpClientResponse) =>
-  Effect.gen(function* () {
-    const queue = yield* Queue.unbounded<SSEQueueEvent>();
-    const parser = createParser((event) =>
-      queue.unsafeOffer(SSEQueueEvent.Event({ event })),
-    );
+export const streamSSE = (
+  response: HttpClientResponse.HttpClientResponse,
+): Stream.Stream<ParseEvent, ResponseError> =>
+  Stream.asyncPush<ParseEvent, ResponseError>((emit) =>
+    Effect.gen(function* () {
+      const parser = createParser((event) => emit.single(event));
 
-    const fiberId = yield* Effect.forkScoped(
-      Effect.succeed(response).pipe(
+      yield* Effect.succeed(response).pipe(
         HttpClientResponse.stream,
         Stream.decodeText("utf-8"),
-        Stream.runForEach((chunk) =>
-          Effect.sync(() => {
-            parser.feed(chunk);
-          }),
-        ),
-        Effect.ensuring(queue.shutdown),
-      ),
-    );
-
-    fiberId.addObserver((exit) => {
-      if (Exit.isSuccess(exit)) {
-        return;
-      }
-
-      Match.type<typeof exit.cause>().pipe(
-        Match.tags({
-          Fail: (cause) => {
-            queue.unsafeOffer(SSEQueueEvent.Error(cause));
-          },
-          Die: (die) => {
-            queue.unsafeOffer(
-              SSEQueueEvent.Error({ error: new UnknownException(die.defect) }),
-            );
-          },
-        }),
-        Match.orElse(() => Effect.void),
-      )(exit.cause);
-    });
-
-    const mapQueueEvent = Match.type<SSEQueueEvent>().pipe(
-      Match.tagsExhaustive({
-        Event: (event) => Effect.succeed(event.event),
-        Error: (error) => Effect.fail(error.error),
-      }),
-    );
-
-    return Stream.fromQueue(queue, { shutdown: true }).pipe(
-      Stream.mapEffect(mapQueueEvent),
-    );
-  });
+        Stream.runForEach((chunk) => Effect.succeed(parser.feed(chunk))),
+        Effect.andThen(() => emit.end()),
+      );
+    }),
+  );
 
 /**
  * Filter an SSE stream to only return parsed events.
  */
 export const filterParsedEvents = <E, R>(
   self: Stream.Stream<ParseEvent, E, R>,
-) =>
-  self.pipe(
-    Stream.filter((event): event is ParsedEvent => event.type === "event"),
-  );
+) => Stream.filter(self, (e) => e.type === "event");

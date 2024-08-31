@@ -197,7 +197,7 @@ export const make = (config: Config = {}) =>
               ...params.additionalParameters,
             }),
             Effect.flatMap(client),
-            Effect.flatMap(streamSSE),
+            Effect.map(streamSSE),
             Stream.unwrap,
             filterParsedEvents,
             Stream.filterMap((e) => decodeChatCompletionChunk(e.data)),

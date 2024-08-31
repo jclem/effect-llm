@@ -188,7 +188,7 @@ export const make = (
                 : undefined,
             }),
             Effect.flatMap(client),
-            Effect.flatMap(streamSSE),
+            Effect.map(streamSSE),
           );
         }).pipe(
           Stream.unwrap,
