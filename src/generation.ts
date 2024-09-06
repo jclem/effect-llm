@@ -560,9 +560,11 @@ export const streamTools: {
               ),
               Effect.catchAll((error: unknown) =>
                 Effect.fail(
-                  error instanceof HaltToolLoopError
+                  error instanceof InvalidToolCallError
                     ? error
-                    : new ToolExecutionError({ id: fnCall.id, error }),
+                    : error instanceof HaltToolLoopError
+                      ? error
+                      : new ToolExecutionError({ id: fnCall.id, error }),
                 ),
               ),
             );
@@ -626,6 +628,7 @@ export const streamTools: {
 
         yield* provider.stream(params).pipe(
           Stream.runForEach(onStreamEvent),
+          Effect.andThen(() => handleToolCalls),
           Effect.catchIf(
             (err): err is InvalidToolCallError =>
               err instanceof InvalidToolCallError,
@@ -636,7 +639,6 @@ export const streamTools: {
               err instanceof UnknownToolCallError,
             (error) => onInvalidToolCall(error),
           ),
-          Effect.andThen(() => handleToolCalls),
           Effect.catchTag("HaltToolLoopError", () => end()),
           Effect.catchAll((error) => fail(error)),
           Effect.catchAllDefect((defect) => fail(new UnknownException(defect))),
