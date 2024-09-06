@@ -111,63 +111,41 @@ export const haltToolLoop = () => Effect.fail(new HaltToolLoopError());
 /**
  * A tool definition that can be used in a stream generation call.
  */
-export type ToolDefinition<
+export interface ToolDefinition<
   Name extends string,
   A,
   E,
   R,
-  SA,
-  SI = SA,
-  SR = never,
-> =
-  | {
-      /** The name of the tool, given to the model */
-      readonly name: Name;
-      /** A description of the tool, given to the model */
-      readonly description?: string | undefined;
-      /** A schema defining the tool's inputs */
-      readonly input: S.Schema<SA, SI, SR>;
-      /** A function receiving the tool call ID and returning an effect that runs the tool */
-      readonly effect: (
-        id: string,
-        input: SA,
-      ) => Effect.Effect<A, E | HaltToolLoopError, R>;
-    }
-  | {
-      /** The name of the tool, given to the model */
-      readonly name: Name;
-      /** A description of the tool, given to the model */
-      readonly description?: string | undefined;
-      /** A JSON schema defining the tool's inputs */
-      readonly schema: unknown;
-      /** A function receiving the tool call ID and returning an effect that runs the tool */
-      readonly effect: (
-        id: string,
-        input: unknown,
-      ) => Effect.Effect<A, E | HaltToolLoopError, R>;
-    };
+  S extends S.Schema<any, any, any> | unknown,
+> {
+  /** The name of the tool, given to the model */
+  readonly name: Name;
+  /** A description of the tool, given to the model */
+  readonly description?: string | undefined;
+  /**
+   * An Effect schema or JSON schema defining the tool's inputs
+   *
+   * If the schema is a JSON schema, the input is not validated and will be `unknown` in the effect.
+   */
+  readonly input: S;
+  /** A function receiving the tool call ID and returning an effect that runs the tool */
+  readonly effect: (
+    id: string,
+    input: S extends S.Schema<infer SA, infer _SI, infer _SR> ? SA : unknown,
+  ) => Effect.Effect<A, E | HaltToolLoopError, R>;
+}
 
 /**
  * A utility type for an any-typed tool definition.
  */
-export type ToolDefinitionAny = ToolDefinition<
-  string,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any
->;
+export type ToolDefinitionAny = ToolDefinition<string, any, any, any, any>;
 
-type ToolDefinitionError<F extends ToolDefinitionAny> =
-  F extends ToolDefinition<string, any, infer _E, any, any, any, any>
-    ? _E
-    : never;
+export type ToolDefinitionError<F extends ToolDefinitionAny> =
+  F extends ToolDefinition<string, any, infer _E, any, any> ? _E : never;
 
-type ToolDefinitionContext<F extends ToolDefinitionAny> =
-  F extends ToolDefinition<string, any, any, infer _C, any, any, infer _SC>
-    ? _C | _SC
+export type ToolDefinitionContext<F extends ToolDefinitionAny> =
+  F extends ToolDefinition<string, any, any, infer _C, infer _S>
+    ? _C | (_S extends S.Schema<any, any, infer _SR> ? _SR : never)
     : never;
 
 /**
@@ -190,13 +168,11 @@ export function defineTool<
   A,
   E,
   R,
-  SA,
-  SI = SA,
-  SR = never,
+  S extends S.Schema<any, any, any> | unknown,
 >(
   name: Name,
-  definition: Omit<ToolDefinition<Name, A, E, R, SA, SI, SR>, "name">,
-): typeof definition & { name: Name } {
+  definition: Omit<ToolDefinition<Name, A, E, R, S>, "name">,
+): ToolDefinition<Name, A, E, R, S> {
   return { ...definition, name };
 }
 
@@ -481,7 +457,7 @@ export const streamTools: {
 
                   let input: unknown;
 
-                  if ("input" in fnFound.value) {
+                  if (S.isSchema(fnFound.value.input)) {
                     input = yield* S.decodeUnknown(
                       S.parseJson(fnFound.value.input),
                     )(toolCall.arguments).pipe(
