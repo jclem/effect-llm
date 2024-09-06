@@ -116,7 +116,7 @@ export interface ToolDefinition<
   A,
   E,
   R,
-  S extends S.Schema<any, any, any> | unknown,
+  I extends S.Schema<any, any, any> | unknown,
 > {
   /** The name of the tool, given to the model */
   readonly name: Name;
@@ -127,11 +127,11 @@ export interface ToolDefinition<
    *
    * If the schema is a JSON schema, the input is not validated and will be `unknown` in the effect.
    */
-  readonly input: S;
+  readonly input: I;
   /** A function receiving the tool call ID and returning an effect that runs the tool */
   readonly effect: (
     id: string,
-    input: S extends S.Schema<infer SA, infer _SI, infer _SR> ? SA : unknown,
+    input: I extends S.Schema<infer IA, any, any> ? IA : unknown,
   ) => Effect.Effect<A, E | HaltToolLoopError, R>;
 }
 
@@ -141,11 +141,11 @@ export interface ToolDefinition<
 export type ToolDefinitionAny = ToolDefinition<string, any, any, any, any>;
 
 export type ToolDefinitionError<F extends ToolDefinitionAny> =
-  F extends ToolDefinition<string, any, infer _E, any, any> ? _E : never;
+  F extends ToolDefinition<string, any, infer E, any, any> ? E : never;
 
 export type ToolDefinitionContext<F extends ToolDefinitionAny> =
-  F extends ToolDefinition<string, any, any, infer _C, infer _S>
-    ? _C | (_S extends S.Schema<any, any, infer _SR> ? _SR : never)
+  F extends ToolDefinition<string, any, any, infer C, infer I>
+    ? C | (I extends S.Schema<any, any, infer IR> ? IR : never)
     : never;
 
 /**
@@ -168,11 +168,11 @@ export function defineTool<
   A,
   E,
   R,
-  S extends S.Schema<any, any, any> | unknown,
+  I extends S.Schema<any, any, any> | unknown,
 >(
   name: Name,
-  definition: Omit<ToolDefinition<Name, A, E, R, S>, "name">,
-): ToolDefinition<Name, A, E, R, S> {
+  definition: Omit<ToolDefinition<Name, A, E, R, I>, "name">,
+): ToolDefinition<Name, A, E, R, I> {
   return { ...definition, name };
 }
 
