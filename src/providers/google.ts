@@ -240,7 +240,9 @@ const gatherTools = (tools: Readonly<ToolDefinitionAny[]>) => {
   };
 
   return tools.map((tool) => {
-    const schema = JSONSchema.make(tool.input);
+    const schema = S.isSchema(tool.input)
+      ? JSONSchema.make(tool.input)
+      : tool.input;
     removeUnknownProperties(schema);
 
     return {

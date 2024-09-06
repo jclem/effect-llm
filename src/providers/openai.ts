@@ -142,7 +142,9 @@ export const make = (config: Config = {}) =>
                 json_schema: {
                   name: params.name,
                   strict: params.strict ?? true,
-                  schema: JSONSchema.make(params.schema),
+                  schema: S.isSchema(params.schema)
+                    ? JSONSchema.make(params.schema)
+                    : params.schema,
                 },
               },
               ...params.additionalParameters,
@@ -273,7 +275,9 @@ const gatherTools = (tools: Readonly<ToolDefinitionAny[]>) =>
     function: {
       name: tool.name,
       description: tool.description,
-      parameters: JSONSchema.make(tool.input),
+      parameters: S.isSchema(tool.input)
+        ? JSONSchema.make(tool.input)
+        : tool.input,
     },
   }));
 

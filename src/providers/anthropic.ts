@@ -458,7 +458,9 @@ const gatherTools = (tools: Readonly<ToolDefinitionAny[]>) =>
   tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
-    input_schema: JSONSchema.make(tool.input),
+    input_schema: S.isSchema(tool.input)
+      ? JSONSchema.make(tool.input)
+      : tool.input,
   }));
 
 class InvalidToolCallOptionError extends Data.TaggedError(
