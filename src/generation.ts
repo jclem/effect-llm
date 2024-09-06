@@ -111,7 +111,7 @@ export const haltToolLoop = () => Effect.fail(new HaltToolLoopError());
 /**
  * A tool definition that can be used in a stream generation call.
  */
-export interface ToolDefinition<
+export type ToolDefinition<
   Name extends string,
   A,
   E,
@@ -119,19 +119,33 @@ export interface ToolDefinition<
   SA,
   SI = SA,
   SR = never,
-> {
-  /** The name of the tool, given to the model */
-  readonly name: Name;
-  /** A description of the tool, given to the model */
-  readonly description?: string | undefined;
-  /** A schema defining the tool's inputs */
-  readonly input: S.Schema<SA, SI, SR>;
-  /** A function receiving the tool call ID and returning an effect that runs the tool */
-  readonly effect: (
-    id: string,
-    input: SA,
-  ) => Effect.Effect<A, E | HaltToolLoopError, R>;
-}
+> =
+  | {
+      /** The name of the tool, given to the model */
+      readonly name: Name;
+      /** A description of the tool, given to the model */
+      readonly description?: string | undefined;
+      /** A schema defining the tool's inputs */
+      readonly input: S.Schema<SA, SI, SR>;
+      /** A function receiving the tool call ID and returning an effect that runs the tool */
+      readonly effect: (
+        id: string,
+        input: SA,
+      ) => Effect.Effect<A, E | HaltToolLoopError, R>;
+    }
+  | {
+      /** The name of the tool, given to the model */
+      readonly name: Name;
+      /** A description of the tool, given to the model */
+      readonly description?: string | undefined;
+      /** A JSON schema defining the tool's inputs */
+      readonly schema: unknown;
+      /** A function receiving the tool call ID and returning an effect that runs the tool */
+      readonly effect: (
+        id: string,
+        input: unknown,
+      ) => Effect.Effect<A, E | HaltToolLoopError, R>;
+    };
 
 /**
  * A utility type for an any-typed tool definition.
@@ -182,7 +196,7 @@ export function defineTool<
 >(
   name: Name,
   definition: Omit<ToolDefinition<Name, A, E, R, SA, SI, SR>, "name">,
-): ToolDefinition<Name, A, E, R, SA, SI, SR> {
+): typeof definition & { name: Name } {
   return { ...definition, name };
 }
 
@@ -465,18 +479,24 @@ export const streamTools: {
                     );
                   }
 
-                  const input: unknown = yield* S.decodeUnknown(
-                    S.parseJson(fnFound.value.input),
-                  )(toolCall.arguments).pipe(
-                    Effect.catchTag("ParseError", (error) =>
-                      Effect.fail(
-                        new InvalidToolCallError({
-                          toolCall: toolCall,
-                          error,
-                        }),
+                  let input: unknown;
+
+                  if ("input" in fnFound.value) {
+                    input = yield* S.decodeUnknown(
+                      S.parseJson(fnFound.value.input),
+                    )(toolCall.arguments).pipe(
+                      Effect.catchTag("ParseError", (error) =>
+                        Effect.fail(
+                          new InvalidToolCallError({
+                            toolCall: toolCall,
+                            error,
+                          }),
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  } else {
+                    input = S.decodeUnknown(S.parseJson())(toolCall.arguments);
+                  }
 
                   fnCalls.push({
                     id: toolCall.id,
