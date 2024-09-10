@@ -471,7 +471,9 @@ export const streamTools: {
                       ),
                     );
                   } else {
-                    input = S.decodeUnknown(S.parseJson())(toolCall.arguments);
+                    input = yield* S.decodeUnknown(S.parseJson())(
+                      toolCall.arguments,
+                    );
                   }
 
                   fnCalls.push({
