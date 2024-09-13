@@ -18,6 +18,7 @@ export const streamSSE = (
         Stream.decodeText("utf-8"),
         Stream.runForEach((chunk) => Effect.succeed(parser.feed(chunk))),
         Effect.andThen(() => emit.end()),
+        Effect.fork,
       );
     }),
   );

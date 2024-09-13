@@ -25,9 +25,9 @@
   ],
   "scripts": {
     "check": "konk run c -cgL -n'check:*'",
-    "check:prettier": "prettier --check .",
-    "check:eslint": "eslint .",
-    "check:build": "tsc --noEmit"
+    "check:prettier": "bunx prettier --check .",
+    "check:eslint": "bunx eslint .",
+    "check:build": "bunx tsc --noEmit"
   },
   "exports": {
     "import": "./dist/index.mjs",
