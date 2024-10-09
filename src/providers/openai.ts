@@ -57,6 +57,10 @@ const ChatCompletionChunk = S.Struct({
       finish_reason: S.NullOr(ChatCompletionFinishReason),
     }),
   ),
+  usage: S.Struct({
+    prompt_tokens: S.Int,
+    completion_tokens: S.Int,
+  }).pipe(S.NullOr),
 });
 
 type ChatCompletionChunk = typeof ChatCompletionChunk.Type;
@@ -192,6 +196,9 @@ export const make = (config: Config = {}) =>
               messages: messagesFromEvents(params.events),
               max_tokens: params.maxTokens,
               stream: true,
+              stream_options: {
+                include_usage: true,
+              },
               tools: params.tools ? gatherTools(params.tools) : undefined,
               tool_choice: params.toolCall
                 ? getToolChoice(params.toolCall)
@@ -217,6 +224,15 @@ export const make = (config: Config = {}) =>
                 const toolCall = choice.delta.tool_calls?.at(0);
 
                 const events: StreamEvent[] = [];
+
+                if (event.usage) {
+                  events.push(
+                    StreamEventEnum.Stats({
+                      inputTokens: event.usage.prompt_tokens,
+                      outputTokens: event.usage.completion_tokens,
+                    }),
+                  );
+                }
 
                 if (content != null) {
                   partialMessage += content;

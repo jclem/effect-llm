@@ -200,6 +200,11 @@ export type StreamEvent = Data.TaggedEnum<{
     readonly name: string;
     readonly arguments: string;
   };
+  /** Represents statistics related to the call */
+  Stats: {
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+  };
 }>;
 
 /** An enum of all stream events */
