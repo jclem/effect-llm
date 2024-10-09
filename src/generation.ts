@@ -375,12 +375,19 @@ export interface StreamLoop {
 
 const StreamLoop = Data.tagged<StreamLoop>("StreamLoop");
 
+export interface StreamLoopEnd {
+  readonly _tag: "StreamLoopEnd";
+}
+
+const StreamLoopEnd = Data.tagged<StreamLoopEnd>("StreamLoopEnd");
+
 /**
  * An event emitted during a stream using tool calls.
  */
 export type StreamToolsEvent =
   | StreamEvent
   | StreamLoop
+  | StreamLoopEnd
   | ToolResult<unknown, unknown>;
 
 export class MaxIterationsError extends Data.TaggedError(
@@ -651,6 +658,7 @@ export const streamTools: {
 
         yield* provider.stream({ ...params, events: truncatedEvents }).pipe(
           Stream.runForEach(onStreamEvent),
+          Effect.andThen(() => single(StreamLoopEnd())),
           Effect.andThen(() => handleToolCalls),
           Effect.catchIf(
             (err): err is InvalidToolCallError =>
