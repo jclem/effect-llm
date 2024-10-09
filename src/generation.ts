@@ -29,6 +29,11 @@ import {
   type ThreadEvent,
 } from "./thread.js";
 
+/** An error that occurs when events can not be truncated between iterations. */
+export class TruncateEventsError extends Data.TaggedError(
+  "TruncateEventsError",
+) {}
+
 /** Parameters used to configure an LLM stream generation call. */
 export interface StreamParams<FnDefns extends Readonly<ToolDefinitionAny[]>> {
   /** A redacted API key */
@@ -41,6 +46,10 @@ export interface StreamParams<FnDefns extends Readonly<ToolDefinitionAny[]>> {
   readonly events: readonly ThreadEvent[];
   /** The maximum iterations when streaming with automated tool calls */
   readonly maxIterations?: number | undefined;
+  /** A function called that truncates events on the first and subsequent iterations */
+  readonly truncateEvents?: (
+    events: readonly ThreadEvent[],
+  ) => Effect.Effect<readonly ThreadEvent[], TruncateEventsError>;
   /** The maximum number of tokens per response */
   readonly maxTokens?: number | undefined;
   /** The tools calls the model may make */
@@ -386,7 +395,8 @@ export type StreamToolsStream<FnDefns extends Readonly<ToolDefinitionAny[]>> =
     | UnknownException
     | MissingParameterError
     | ToolExecutionError<unknown>
-    | ToolDefinitionError<FnDefns[number]>,
+    | ToolDefinitionError<FnDefns[number]>
+    | TruncateEventsError,
     Scope.Scope | ToolDefinitionContext<FnDefns[number]>
   >;
 
@@ -633,7 +643,11 @@ export const streamTools: {
 
         yield* single(StreamLoop());
 
-        yield* provider.stream(params).pipe(
+        const truncatedEvents = params.truncateEvents
+          ? yield* params.truncateEvents(params.events)
+          : params.events;
+
+        yield* provider.stream({ ...params, events: truncatedEvents }).pipe(
           Stream.runForEach(onStreamEvent),
           Effect.andThen(() => handleToolCalls),
           Effect.catchIf(
