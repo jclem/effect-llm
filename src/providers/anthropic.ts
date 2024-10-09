@@ -68,10 +68,8 @@ type MessageStart = typeof MessageStart.Type;
 const MessageDelta = S.parseJson(
   S.Struct({
     type: S.Literal("message_delta"),
-    delta: S.Struct({
-      usage: S.Struct({
-        output_tokens: S.Int,
-      }),
+    usage: S.Struct({
+      output_tokens: S.Int,
     }),
   }),
 );
@@ -319,7 +317,7 @@ export const make = (
                       return [
                         StreamEventEnum.Stats({
                           inputTokens: 0,
-                          outputTokens: event.delta.usage.output_tokens,
+                          outputTokens: event.usage.output_tokens,
                         }),
                       ];
                     },
