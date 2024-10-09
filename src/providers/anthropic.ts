@@ -52,6 +52,31 @@ const ToolUseContentBlock = S.Struct({
   input: S.Object,
 });
 
+const MessageStart = S.parseJson(
+  S.Struct({
+    type: S.Literal("message_start"),
+    message: S.Struct({
+      usage: S.Struct({
+        input_tokens: S.Int,
+        output_tokens: S.Int,
+      }),
+    }),
+  }),
+);
+type MessageStart = typeof MessageStart.Type;
+
+const MessageDelta = S.parseJson(
+  S.Struct({
+    type: S.Literal("message_delta"),
+    delta: S.Struct({
+      usage: S.Struct({
+        output_tokens: S.Int,
+      }),
+    }),
+  }),
+);
+type MessageDelta = typeof MessageDelta.Type;
+
 const ContentBlockStart = S.parseJson(
   S.Struct({
     type: S.Literal("content_block_start"),
@@ -90,12 +115,15 @@ const ContentBlockStop = S.parseJson(
 );
 
 const AnthropicStreamEvent = S.Union(
+  MessageStart,
+  MessageDelta,
   ContentBlockStart,
   ContentBlockDelta,
   ContentBlockStop,
 );
-type ContentBlockEvent = typeof AnthropicStreamEvent.Type;
-const decodeContentBlockEvent = S.decodeUnknownOption(AnthropicStreamEvent);
+type AnthropicStreamEvent = typeof AnthropicStreamEvent.Type;
+
+const decodeEvent = S.decodeUnknownOption(AnthropicStreamEvent);
 
 interface Config {
   defaultParams?: DefaultParams;
@@ -161,7 +189,7 @@ export const make = (
             Effect.map(streamSSE),
             Stream.unwrap,
             filterParsedEvents,
-            Stream.filterMap((e) => decodeContentBlockEvent(e.data)),
+            Stream.filterMap((e) => decodeEvent(e.data)),
             (stream) => {
               // TODO: Why does the tool use content block start have an input object?
               // TODO: Is the initial text on a text content block start also ever non-empty?
@@ -177,14 +205,22 @@ export const make = (
               const blocks: Block[] = [];
 
               return Stream.mapConcat<
-                ContentBlockEvent,
+                AnthropicStreamEvent,
                 HttpClientError | HttpBodyError | UnknownException,
                 Scope.Scope,
                 StreamEvent
               >(
                 stream,
-                Match.type<ContentBlockEvent>().pipe(
+                Match.type<AnthropicStreamEvent>().pipe(
                   Match.discriminatorsExhaustive("type")({
+                    message_start: (event) => {
+                      return [
+                        StreamEventEnum.Stats({
+                          inputTokens: event.message.usage.input_tokens,
+                          outputTokens: event.message.usage.output_tokens,
+                        }),
+                      ];
+                    },
                     content_block_start: (event) => {
                       switch (event.content_block.type) {
                         case "text":
@@ -278,6 +314,14 @@ export const make = (
                           ];
                         }
                       }
+                    },
+                    message_delta: (event) => {
+                      return [
+                        StreamEventEnum.Stats({
+                          inputTokens: 0,
+                          outputTokens: event.delta.usage.output_tokens,
+                        }),
+                      ];
                     },
                   }),
                 ),
