@@ -32,7 +32,9 @@ import {
 /** An error that occurs when events can not be truncated between iterations. */
 export class TruncateEventsError extends Data.TaggedError(
   "TruncateEventsError",
-) {}
+)<{ readonly error: Error }> {
+  readonly message = `Truncation error: ${this.error.message}`;
+}
 
 /** Parameters used to configure an LLM stream generation call. */
 export interface StreamParams<FnDefns extends Readonly<ToolDefinitionAny[]>> {
