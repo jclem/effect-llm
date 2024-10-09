@@ -1,6 +1,6 @@
 {
   "name": "@jclem/effect-llm",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "An Effect wrapper around some LLM APIs",
   "license": "MIT",
   "author": "Jonathan Clem <j@jclem.me> (https://jclem.me)",
