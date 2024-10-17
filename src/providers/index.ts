@@ -14,8 +14,10 @@ export * as OpenAI from "./openai.js";
 export class MissingParameterError extends Data.TaggedError(
   "MissingParameterError",
 )<{
-  parameter: string;
-}> {}
+  readonly parameter: string;
+}> {
+  readonly message = `Missing required parameter: ${this.parameter}`;
+}
 
 /**
  * Default parameters that can be passed to a provider
