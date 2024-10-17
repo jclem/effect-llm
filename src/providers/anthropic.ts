@@ -307,7 +307,10 @@ export const make = (
                             StreamEventEnum.ToolCall({
                               id: block.toolUse.id,
                               name: block.toolUse.name,
-                              arguments: block.toolUse.input,
+                              // Anthropic requires the input to be a JSON object, but
+                              // will return an empty string for arguments if an empty object
+                              // is specified in the input JSON schema.
+                              arguments: block.toolUse.input.trim() || "{}",
                             }),
                           ];
                         }
