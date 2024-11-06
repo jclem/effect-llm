@@ -12,7 +12,7 @@ const setup = <A, E, R>(self: Effect.Effect<A, E, R>) =>
 const responseLayer = (...args: ConstructorParameters<typeof Response>) =>
   Layer.succeed(
     HttpClient.HttpClient,
-    HttpClient.makeDefault((req) =>
+    HttpClient.make((req) =>
       Effect.succeed(HttpClientResponse.fromWeb(req, new Response(...args))),
     ),
   );

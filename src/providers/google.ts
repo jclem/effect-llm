@@ -1,13 +1,14 @@
 import { HttpClient, HttpClientRequest } from "@effect/platform";
-import { JSONSchema, Schema as S } from "@effect/schema";
 import {
   Array,
   Effect,
   Function,
+  JSONSchema,
   Match,
   Option,
   pipe,
   Redacted,
+  Schema as S,
   Stream,
 } from "effect";
 import {
@@ -141,9 +142,12 @@ interface Config {
  */
 export const make = (
   config: Config,
-): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
-  Effect.sync(function () {
-    const client = HttpClient.fetchOk.pipe(
+): Effect.Effect<Provider, never, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    const httpClient = yield* HttpClient.HttpClient;
+
+    const client = httpClient.pipe(
+      HttpClient.filterStatusOk,
       HttpClient.mapRequest(
         HttpClientRequest.prependUrl(config.serviceEndpoint),
       ),
@@ -174,7 +178,7 @@ export const make = (
             `/v1/${model}:streamGenerateContent?alt=sse`,
           ).pipe(
             HttpClientRequest.setHeader("Authorization", `Bearer ${apiKey}`),
-            HttpClientRequest.schemaBody(RequestBody)({
+            HttpClientRequest.schemaBodyJson(RequestBody)({
               contents: contentsFromEvents(params.events),
               tools: params.tools ? gatherTools(params.tools) : undefined,
               toolConfig: params.toolCall
@@ -187,7 +191,7 @@ export const make = (
                   }
                 : undefined,
             }),
-            Effect.flatMap(client),
+            Effect.flatMap(client.execute),
             Effect.map(streamSSE),
           );
         }).pipe(

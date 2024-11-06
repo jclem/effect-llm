@@ -2,8 +2,6 @@
 
 import type { HttpBodyError } from "@effect/platform/HttpBody";
 import type { HttpClientError } from "@effect/platform/HttpClientError";
-import { Schema as S } from "@effect/schema";
-import type { ParseError } from "@effect/schema/ParseResult";
 import type { Redacted } from "effect";
 import {
   Array,
@@ -14,12 +12,14 @@ import {
   Match,
   Option,
   pipe,
+  Schema as S,
   Stream,
   type Scope,
 } from "effect";
 import { UnknownException } from "effect/Cause";
 import type { TaggedEnum } from "effect/Data";
 import { dual } from "effect/Function";
+import type { ParseError } from "effect/ParseResult";
 import type { MissingParameterError } from "./providers/index.js";
 import {
   ToolResultErrorEvent,

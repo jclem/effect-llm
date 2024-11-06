@@ -1,7 +1,6 @@
-import { HttpClient } from "@effect/platform";
+import { FetchHttpClient } from "@effect/platform";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
-import { Schema as S } from "@effect/schema";
-import { Config, Effect } from "effect";
+import { Config, Effect, Schema as S } from "effect";
 import { Thread } from "../src";
 import { OpenAI } from "../src/providers";
 import { TextChunk } from "../src/thread";
@@ -49,6 +48,6 @@ Effect.gen(function* () {
   });
 }).pipe(
   Effect.provide(BunContext.layer),
-  Effect.provide(HttpClient.layer),
+  Effect.provide(FetchHttpClient.layer),
   BunRuntime.runMain,
 );
