@@ -1,7 +1,6 @@
-import { HttpClient } from "@effect/platform";
+import { FetchHttpClient } from "@effect/platform";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
-import { Schema as S } from "@effect/schema";
-import { Config, Console, Effect, Layer, Stream } from "effect";
+import { Config, Console, Effect, Layer, Schema as S, Stream } from "effect";
 import { Generation, Thread } from "../src";
 import * as Google from "../src/providers/google";
 import { TextChunk } from "../src/thread";
@@ -56,6 +55,6 @@ Effect.gen(function* () {
     ),
   ),
   Effect.provide(BunContext.layer),
-  Effect.provide(HttpClient.layer),
+  Effect.provide(FetchHttpClient.layer),
   BunRuntime.runMain,
 );

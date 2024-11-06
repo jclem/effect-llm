@@ -1,14 +1,15 @@
 import { HttpClient, HttpClientRequest } from "@effect/platform";
 import type { HttpBodyError } from "@effect/platform/HttpBody";
 import type { HttpClientError } from "@effect/platform/HttpClientError";
-import { JSONSchema, Schema as S } from "@effect/schema";
 import {
   Array,
   Data,
   Effect,
+  JSONSchema,
   Match,
   Option,
   Redacted,
+  Schema as S,
   Stream,
   type Scope,
 } from "effect";
@@ -129,23 +130,21 @@ interface Config {
 
 export const make = (
   config: Config = {},
-): Effect.Effect<Provider, never, HttpClient.HttpClient.Default> =>
+): Effect.Effect<Provider, never, HttpClient.HttpClient> =>
   Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient.pipe(
-      Effect.map(HttpClient.filterStatusOk),
-      Effect.map(
-        HttpClient.mapRequest(
-          HttpClientRequest.prependUrl("https://api.anthropic.com"),
-        ),
+    const httpClient = yield* HttpClient.HttpClient;
+
+    const client = httpClient.pipe(
+      HttpClient.filterStatusOk,
+      HttpClient.mapRequest(
+        HttpClientRequest.prependUrl("https://api.anthropic.com"),
       ),
-      Effect.map(
-        HttpClient.mapRequest(
-          HttpClientRequest.setHeaders({
-            "Anthropic-Beta": "max-tokens-3-5-sonnet-2024-07-15",
-            "Anthropic-Version": "2023-06-01",
-            "Content-Type": "application/json",
-          }),
-        ),
+      HttpClient.mapRequest(
+        HttpClientRequest.setHeaders({
+          "Anthropic-Beta": "max-tokens-3-5-sonnet-2024-07-15",
+          "Anthropic-Version": "2023-06-01",
+          "Content-Type": "application/json",
+        }),
       ),
     );
 
@@ -172,7 +171,7 @@ export const make = (
 
           return HttpClientRequest.post("/v1/messages").pipe(
             HttpClientRequest.setHeader("X-API-Key", apiKey),
-            HttpClientRequest.jsonBody({
+            HttpClientRequest.bodyJson({
               // TODO: Handle system messages
               model,
               system: params.system,
@@ -183,7 +182,7 @@ export const make = (
               tool_choice: toolChoice,
               ...params.additionalParameters,
             }),
-            Effect.flatMap(client),
+            Effect.flatMap(client.execute),
             Effect.map(streamSSE),
             Stream.unwrap,
             filterParsedEvents,

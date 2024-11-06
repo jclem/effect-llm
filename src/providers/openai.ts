@@ -3,8 +3,17 @@ import {
   HttpClientRequest,
   HttpClientResponse,
 } from "@effect/platform";
-import { JSONSchema, Schema as S } from "@effect/schema";
-import { Array, Data, Effect, Match, Option, Redacted, Stream } from "effect";
+import {
+  Array,
+  Data,
+  Effect,
+  JSONSchema,
+  Match,
+  Option,
+  Redacted,
+  Schema as S,
+  Stream,
+} from "effect";
 import type {
   StreamEvent,
   ToolCallOption,
@@ -137,7 +146,7 @@ export const make = (config: Config = {}) =>
 
           return yield* HttpClientRequest.post("/v1/chat/completions").pipe(
             HttpClientRequest.setHeader("Authorization", `Bearer ${apiKey}`),
-            HttpClientRequest.jsonBody({
+            HttpClientRequest.bodyJson({
               model,
               messages: messagesFromEvents(params.events),
               max_tokens: params.maxTokens,
@@ -153,7 +162,7 @@ export const make = (config: Config = {}) =>
               },
               ...params.additionalParameters,
             }),
-            Effect.flatMap(client),
+            Effect.flatMap(client.execute),
             Effect.flatMap(HttpClientResponse.schemaBodyJson(ChatCompletion)),
             Effect.map((comp) => comp.choices[0].message),
             Effect.flatMap((msg) =>
@@ -191,7 +200,7 @@ export const make = (config: Config = {}) =>
 
           return HttpClientRequest.post("/v1/chat/completions").pipe(
             HttpClientRequest.setHeader("Authorization", `Bearer ${apiKey}`),
-            HttpClientRequest.jsonBody({
+            HttpClientRequest.bodyJson({
               model,
               messages: messagesFromEvents(params.events),
               max_tokens: params.maxTokens,
@@ -205,7 +214,7 @@ export const make = (config: Config = {}) =>
                 : undefined,
               ...params.additionalParameters,
             }),
-            Effect.flatMap(client),
+            Effect.flatMap(client.execute),
             Effect.map(streamSSE),
             Stream.unwrap,
             filterParsedEvents,
